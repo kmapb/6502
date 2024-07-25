@@ -1,9 +1,17 @@
 #include <cstdio>
 #include <cstdint>
+#include <cstdlib>
+
+#define NOT_IMPLEMENTED() abort()
+#define NOT_REACHED() abort()
+
 
 struct Memory {
     uint8_t bytes[1 << 16];
     uint8_t& operator[](uint16_t addr) {
+        return bytes[addr];
+    }
+    const uint8_t& operator[](uint16_t addr) const {
         return bytes[addr];
     }
 };
@@ -22,9 +30,25 @@ struct RegisterFile {
         unsigned int I : 1;
         unsigned int D : 1;
         unsigned int V : 1;
+        unsigned int N : 1;
 
         // B flag isn't memory: just reflects cause of the flag spill
     } flags;
+
+    uint8_t read_flags(bool breakp=false) const {
+        return flags.C |
+          (flags.Z << 1) |
+          (flags.I << 2) |
+          (flags.D << 3) |
+          (breakp << 4)  |
+          (1      << 5)  | // Always pushed as 1
+          (flags.V << 6) |
+          (flags.N << 7);
+    }
+
+    uint16_t stack_address() const {
+        return 0x100 | SP;
+    }
 };
 
 // Name, bytes of instruction stream consumned
@@ -57,6 +81,8 @@ addressing_mode_to_length(AddressingMode mode) {
         ADDRESSING_MODES()
 #undef ADDRESSING_MODE
     }
+    NOT_REACHED();
+    return 0;
 }
 
 uint16_t
@@ -121,20 +147,49 @@ operand(RegisterFile& regs, Memory& mem, AddressingMode mode) {
 
 // See https://www.masswerk.at/6502/6502_instruction_set.html
 #define OPCODES() \
- OPCODE(BRK, 0x00, IMPLIED)  \
- OPCODE(OR_A, 0x01, X_IND)
+ OPCODE(BRK, 0x00, IMPLIED)       \
+ OPCODE(ORA, 0x01, X_IND)         \
+ OPCODE(ORA, 0x05, ZPG)           \
+ OPCODE(ORA, 0x09, IMMEDIATE)     \
+ OPCODE(ORA, 0x0d, ABS)           \
+ OPCODE(ORA, 0x11, IND_Y)         \
+ OPCODE(ORA, 0x15, ZPG_X)         \
+ OPCODE(ORA, 0x19, ABS_Y)         \
+ OPCODE(ORA, 0x1d, ABS_X)         \
 
-#include <cstdlib>
-#define NOT_IMPLEMENTED() abort()
+uint8_t pop8(RegisterFile& regs, const Memory& mem) {
+    return mem[regs.SP++];
+}
 
+uint16_t pop16(RegisterFile& regs, const Memory& mem) {
+    uint8_t ll = pop8(regs, mem);
+    uint8_t hh = pop8(regs, mem);
+    return ll | (hh << 8);
+}
+void push8(RegisterFile& regs, Memory& mem, uint8_t val) {
+    mem[--regs.SP] = val;
+}
+
+void push16(RegisterFile& regs, Memory& mem, uint16_t val) {
+    push8(regs, mem, val & 0xff);
+    push8(regs, mem, (val & 0xff00) >> 8);
+}
+
+void push_status(RegisterFile& regs, Memory& mem, bool breakp=false) {
+    push8(regs, mem, regs.read_flags(breakp));
+}
+
+// Opcode implementations
 uint16_t
 op_BRK(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    push16(regs, mem, regs.PC + 2); // Excess byte after BRK 
+    push_status(regs, mem, true);
     NOT_IMPLEMENTED();
     return 0;
 };
 
 uint16_t
-op_OR_A(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+op_ORA(RegisterFile& regs, Memory& mem, AddressingMode mode) {
     auto newA = regs.A | operand(regs, mem, mode);
     regs.A = newA;
     regs.flags.Z = newA >> 7;
