@@ -20,6 +20,19 @@ struct Memory {
     void reset() {
         memset(bytes, 0, sizeof(bytes));
     }
+
+    uint16_t read16(uint16_t addr) const {
+        auto ll = bytes[addr];
+        auto hh = bytes[(addr + 1) & 0xffff];
+        return (hh << 8) | ll;
+    }
+
+    void write16(uint16_t addr, uint16_t val) {
+        auto ll = val & 0xff;
+        auto hh = (val & 0xff00) >> 8;
+        bytes[addr] = ll;
+        bytes[(addr + 1) & 0xffff] = hh;
+    }
 };
 
 struct RegisterFile {
@@ -175,7 +188,7 @@ operand(RegisterFile& regs, Memory& mem, AddressingMode mode) {
  OPCODE(ORA, 0x1d, ABS_X)         \
 
 uint8_t pop8(RegisterFile& regs, const Memory& mem) {
-    return mem[regs.SP++];
+    return mem[++regs.SP];
 }
 
 uint16_t pop16(RegisterFile& regs, const Memory& mem) {
@@ -183,8 +196,9 @@ uint16_t pop16(RegisterFile& regs, const Memory& mem) {
     uint8_t hh = pop8(regs, mem);
     return ll | (hh << 8);
 }
+
 void push8(RegisterFile& regs, Memory& mem, uint8_t val) {
-    mem[--regs.SP] = val;
+    mem[regs.SP--] = val;
 }
 
 void push16(RegisterFile& regs, Memory& mem, uint16_t val) {
@@ -201,7 +215,7 @@ uint16_t
 op_BRK(RegisterFile& regs, Memory& mem, AddressingMode mode) {
     push16(regs, mem, regs.PC + 2); // Excess byte after BRK 
     push_status(regs, mem, true);
-    NOT_IMPLEMENTED();
+    regs.PC = mem.read16(0xfffe);
     return 0;
 };
 
