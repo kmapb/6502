@@ -2,7 +2,6 @@
 #include <cstdio>
 #include <cstdint>
 #include <cstdlib>
-#include <cstring>
 
 #define NOT_IMPLEMENTED() abort()
 #define NOT_REACHED() abort()
@@ -10,29 +9,12 @@
 
 struct Memory {
     uint8_t bytes[1 << 16];
-    uint8_t& operator[](uint16_t addr) {
-        return bytes[addr];
-    }
-    const uint8_t& operator[](uint16_t addr) const {
-        return bytes[addr];
-    }
-
-    void reset() {
-        memset(bytes, 0, sizeof(bytes));
-    }
-
-    uint16_t read16(uint16_t addr) const {
-        auto ll = bytes[addr];
-        auto hh = bytes[(addr + 1) & 0xffff];
-        return (hh << 8) | ll;
-    }
-
-    void write16(uint16_t addr, uint16_t val) {
-        auto ll = val & 0xff;
-        auto hh = (val & 0xff00) >> 8;
-        bytes[addr] = ll;
-        bytes[(addr + 1) & 0xffff] = hh;
-    }
+   
+    uint8_t& operator[](uint16_t addr);
+    const uint8_t& operator[](uint16_t addr) const;
+    void reset();
+    uint16_t read16(uint16_t addr) const;
+    void write16(uint16_t addr, uint16_t val);
 };
 
 struct RegisterFile {
