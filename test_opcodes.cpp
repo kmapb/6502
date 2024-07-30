@@ -8,7 +8,7 @@ TEST(Opcode, BRK) {
     Memory mem;
 
     regs.PC = 0x300;
-    mem[0x300] = OPCODE_BRK_IMPLIED;
+    mem[0x300] = 0x00; // BRK
     mem[0x301] = 0xff;
     mem.write16(0xfffe, 0xcafe);
     regs.SP = 0xf8;
