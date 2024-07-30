@@ -166,8 +166,7 @@ uint16_t
 op_BRK(RegisterFile& regs, Memory& mem, AddressingMode mode) {
     push16(regs, mem, regs.PC + 2); // Excess byte after BRK 
     push_status(regs, mem, true);
-    regs.PC = mem.read16(0xfffe);
-    return 0;
+    return mem.read16(0xfffe);
 };
 
 uint16_t
