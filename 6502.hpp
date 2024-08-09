@@ -1,4 +1,5 @@
 #pragma once
+
 #include <cstdio>
 #include <cstdint>
 #include <cstdlib>
@@ -65,3 +66,49 @@ struct RegisterFile {
 
 extern void run_instr(RegisterFile&, Memory&);
 
+#define MNEMONICS() \
+ MNEMONIC(BRK) \
+ MNEMONIC(ORA)
+
+enum Mnemonic {
+#define MNEMONIC(x)\
+        x,
+MNEMONICS()
+#undef MNEMONIC
+};
+
+#define OPCODES() \
+ OPCODE(BRK, 0x00, IMPLIED)       \
+ OPCODE(ORA, 0x01, X_IND)         \
+ OPCODE(ORA, 0x05, ZPG)           \
+ OPCODE(ORA, 0x09, IMMEDIATE)     \
+ OPCODE(ORA, 0x0d, ABS)           \
+ OPCODE(ORA, 0x11, IND_Y)         \
+ OPCODE(ORA, 0x15, ZPG_X)         \
+ OPCODE(ORA, 0x19, ABS_Y)         \
+ OPCODE(ORA, 0x1d, ABS_X)         \
+
+// Name, bytes of instruction stream consumned
+#define ADDRESSING_MODES() \
+    ADDRESSING_MODE(ACCUMULATOR, 1) \
+    ADDRESSING_MODE(ABS, 3) \
+    ADDRESSING_MODE(ABS_X, 3) \
+    ADDRESSING_MODE(ABS_Y, 3) \
+    ADDRESSING_MODE(IMMEDIATE, 2) \
+    ADDRESSING_MODE(IMPLIED, 1) \
+    ADDRESSING_MODE(INDIRECT,3) \
+    ADDRESSING_MODE(X_IND, 2) \
+    ADDRESSING_MODE(IND_Y, 2) \
+    ADDRESSING_MODE(REL, 2) \
+    ADDRESSING_MODE(ZPG, 2) \
+    ADDRESSING_MODE(ZPG_X, 2) \
+    ADDRESSING_MODE(ZPG_Y, 2)
+
+enum AddressingMode {
+#define ADDRESSING_MODE(mode, len) \
+    mode,
+    ADDRESSING_MODES()
+#undef ADDRESSING_MODE
+};
+
+extern uint8_t addressing_mode_to_length(AddressingMode mode);

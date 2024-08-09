@@ -32,30 +32,7 @@ Memory::write16(uint16_t addr, uint16_t val) {
     bytes[(addr + 1) & 0xffff] = hh;
 }
 
-// Name, bytes of instruction stream consumned
-#define ADDRESSING_MODES() \
-    ADDRESSING_MODE(ACCUMULATOR, 1) \
-    ADDRESSING_MODE(ABS, 3) \
-    ADDRESSING_MODE(ABS_X, 3) \
-    ADDRESSING_MODE(ABS_Y, 3) \
-    ADDRESSING_MODE(IMMEDIATE, 2) \
-    ADDRESSING_MODE(IMPLIED, 1) \
-    ADDRESSING_MODE(INDIRECT,3) \
-    ADDRESSING_MODE(X_IND, 2) \
-    ADDRESSING_MODE(IND_Y, 2) \
-    ADDRESSING_MODE(REL, 2) \
-    ADDRESSING_MODE(ZPG, 2) \
-    ADDRESSING_MODE(ZPG_X, 2) \
-    ADDRESSING_MODE(ZPG_Y, 2)
-
-enum AddressingMode {
-#define ADDRESSING_MODE(mode, len) \
-    mode,
-    ADDRESSING_MODES()
-#undef ADDRESSING_MODE
-};
-
-static inline uint8_t
+uint8_t
 addressing_mode_to_length(AddressingMode mode) {
     switch (mode) {
 #define ADDRESSING_MODE(mode, len) case (mode): return len;
@@ -125,18 +102,6 @@ operand(RegisterFile& regs, Memory& mem, AddressingMode mode) {
     default: return 0;
     }
 }
-
-// See https://www.masswerk.at/6502/6502_instruction_set.html
-#define OPCODES() \
- OPCODE(BRK, 0x00, IMPLIED)       \
- OPCODE(ORA, 0x01, X_IND)         \
- OPCODE(ORA, 0x05, ZPG)           \
- OPCODE(ORA, 0x09, IMMEDIATE)     \
- OPCODE(ORA, 0x0d, ABS)           \
- OPCODE(ORA, 0x11, IND_Y)         \
- OPCODE(ORA, 0x15, ZPG_X)         \
- OPCODE(ORA, 0x19, ABS_Y)         \
- OPCODE(ORA, 0x1d, ABS_X)         \
 
 uint8_t pop8(RegisterFile& regs, const Memory& mem) {
     return mem[++regs.SP];
