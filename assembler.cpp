@@ -6,21 +6,16 @@
 extern size_t
 assemble_instr(Mnemonic mnem, AddressingMode mode, uint16_t dir16, uint8_t* destination) {
     auto len = addressing_mode_to_length(mode);
-#define OPCODE(_mnem, _byte, _mode) \
-        if (mnem == _mnem) { \
-            *destination++ = _byte; \
-            if (len > 1) { \
-                *destination++ = dir16 & 0xff; \
-                if (len == 3) { \
-                    *destination++ = (dir16 & 0xff00) >> 8; \
-                } \
-            } \
-            return len; \
+    const Opcode& opcode = mnem_addr_to_opcode(mnem, mode);
+    *destination++ = opcode.byte;
+    if (len > 1) {
+        *destination++ = dir16 & 0xff;
+        if (len == 2) {
+            *destination++ = (dir16 & 0xff00) >> 8;
         }
-OPCODES()
-#undef OPCODE
-    NOT_REACHED();
-    return size_t(-1);
+    }
+    assert(len > 0 && len < 3);
+    return len;
 }
 
 

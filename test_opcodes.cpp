@@ -11,7 +11,7 @@ TEST(Opcode, BRK) {
 
     a
     .org(0x300)
-    (BRK, IMMEDIATE, 12);
+    (BRK, IMPLIED, 12);
     ASSERT_EQ(mem[0x300], 0x00); // BRK
     mem.write16(0xfffe, 0xcafe);
     regs.PC = 0x300;
@@ -30,10 +30,11 @@ TEST(Opcode, ORA) {
 
         regs.PC = 0x300;
         a
-        .org(regs.PC)(ORA, IMMEDIATE, or_value);
+        .org(regs.PC)
+        (ORA, IMMEDIATE, or_value);
         printf("or value: %d\n", or_value);
         regs.PC = 0x300;
-        EXPECT_EQ(mem[0x300], 0x01); // ORA X_IMD
+        EXPECT_EQ(mem[0x300], 0x09); // ORA IMD
         run_instr(regs, mem);
 
         EXPECT_EQ(regs.flags.Z, or_value == 0);

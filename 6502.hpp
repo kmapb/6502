@@ -94,24 +94,6 @@ MNEMONICS()
 #undef MNEMONIC
 };
 
-#define OPCODES() \
- OPCODE(BRK, 0x00, IMPLIED)       \
-                                  \
- OPCODE(ORA, 0x01, X_IND)         \
- OPCODE(ORA, 0x05, ZPG)           \
- OPCODE(ORA, 0x09, IMMEDIATE)     \
- OPCODE(ORA, 0x0d, ABS)           \
- OPCODE(ORA, 0x11, IND_Y)         \
- OPCODE(ORA, 0x15, ZPG_X)         \
- OPCODE(ORA, 0x19, ABS_Y)         \
- OPCODE(ORA, 0x1d, ABS_X)         \
-                                  \
- OPCODE(ASL, 0x0a, ACCUMULATOR)   \
- OPCODE(ASL, 0x06, ZPG)           \
- OPCODE(ASL, 0x16, ZPG_X)         \
- OPCODE(ASL, 0x0e, ABS)           \
- OPCODE(ASL, 0x1e, ABS_X)
-
 
 // Name, bytes of instruction stream consumned
 #define ADDRESSING_MODES() \
@@ -137,3 +119,12 @@ enum AddressingMode {
 };
 
 extern uint8_t addressing_mode_to_length(AddressingMode mode);
+
+struct Opcode {
+    Mnemonic mnem;
+    uint8_t byte;
+    AddressingMode mode;
+};
+
+extern const Opcode opcodeTable[];
+extern const Opcode& mnem_addr_to_opcode(Mnemonic mnem, AddressingMode mode);

@@ -160,21 +160,71 @@ MNEMONICS()
 #undef MNEMONIC
 };
 
+const Opcode opcodeTable[] = {
+ {BRK, 0x00, IMPLIED},
+
+ {ORA, 0x01, X_IND},
+ {ORA, 0x05, ZPG},
+ {ORA, 0x09, IMMEDIATE},
+ {ORA, 0x0d, ABS},
+ {ORA, 0x11, IND_Y},
+ {ORA, 0x15, ZPG_X},
+ {ORA, 0x19, ABS_Y},
+ {ORA, 0x1d, ABS_X},
+
+ {ASL, 0x0a, ACCUMULATOR},
+ {ASL, 0x06, ZPG},
+ {ASL, 0x16, ZPG_X},
+ {ASL, 0x0e, ABS},
+ {ASL, 0x1e, ABS_X},
+};
+
+const Opcode&
+byte_to_opcode(uint8_t byte)
+{
+    // XXX
+    for (const auto &op : opcodeTable)
+    {
+        if (op.byte == byte)
+            return op;
+    }
+    NOT_REACHED();
+}
+
+const Opcode &mnem_addr_to_opcode(Mnemonic mnem, AddressingMode mode)
+{
+    // XXX
+    for (const auto &op : opcodeTable)
+    {
+        if (op.mnem == mnem && op.mode == mode)
+        {
+            return op;
+        }
+    }
+    NOT_REACHED();
+}
+
+static void
+execute_opcode(const Opcode& opcode, RegisterFile& regs, Memory& mem) {
+    auto oldA = regs.A;
+    switch(opcode.mnem) {
+        case BRK:
+            regs.PC = op_BRK(regs, mem, opcode.mode);
+            break;
+        case ORA:
+            regs.PC = op_ORA(regs, mem, opcode.mode);
+            break;
+        case ASL:
+            regs.PC = op_ASL(regs, mem, opcode.mode);
+            break;
+        default:
+            NOT_REACHED();
+    }
+    set_flags(regs, oldA, regs.A, instrs_to_flags[opcode.mnem]);
+}
+
 void
 run_instr(RegisterFile& regs, Memory& mem) {
-    auto opcode = mem[regs.PC];
-    switch(opcode) {
-#define OPCODE(mnem, opcode, mode) \
-    case opcode: {\
-    auto oldA = regs.A; \
-    regs.PC = op_ ## mnem(regs, mem, mode); \
-    auto newA = regs.A; \
-    set_flags(regs, oldA, newA, instrs_to_flags[mnem]); \
-    } \
-    return;
-
-OPCODES()
-#undef OPCODE
-    }
+    execute_opcode(byte_to_opcode(mem[regs.PC]), regs, mem);
 }
 
