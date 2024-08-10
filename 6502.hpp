@@ -46,6 +46,10 @@ struct RegisterFile {
     uint8_t Y;
     uint8_t SP;
 
+    RegisterFile() {
+        reset();
+    }
+
     // Architected flags;
     Flags flags;
 

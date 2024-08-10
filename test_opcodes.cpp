@@ -30,7 +30,8 @@ TEST(Opcode, ORA) {
 
         regs.PC = 0x300;
         a
-            .org(regs.PC)(ORA, X_IND, 0xff);
+        .org(regs.PC)(ORA, IMMEDIATE, or_value);
+        printf("or value: %d\n", or_value);
         regs.PC = 0x300;
         EXPECT_EQ(mem[0x300], 0x01); // ORA X_IMD
         run_instr(regs, mem);
