@@ -38,7 +38,7 @@ TEST(Opcode, ORA) {
         run_instr(regs, mem);
 
         EXPECT_EQ(regs.flags.Z, or_value == 0);
-        EXPECT_EQ(regs.flags.N, (or_value & 0x80)== 1);
+        EXPECT_EQ(regs.flags.N, (or_value & 0x80) != 0);
     }
 }
 
