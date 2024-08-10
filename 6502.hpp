@@ -18,6 +18,27 @@ struct Memory {
     void write16(uint16_t addr, uint16_t val);
 };
 
+struct Flags {
+    unsigned int C : 1;
+    unsigned int Z : 1;
+    unsigned int I : 1;
+    unsigned int D : 1;
+    unsigned int V : 1;
+    unsigned int N : 1;
+
+    // B flag isn't memory: just reflects cause of the flag spill
+};
+
+// For sets of allowed flags
+enum flags {
+    C = (1 << 0),
+    Z = (1 << 1),
+    I = (1 << 2),
+    D = (1 << 3),
+    V = (1 << 4),
+    N = (1 << 5),
+};
+
 struct RegisterFile {
     uint16_t PC;
     uint8_t A;
@@ -26,16 +47,7 @@ struct RegisterFile {
     uint8_t SP;
 
     // Architected flags;
-    struct {
-        unsigned int C : 1;
-        unsigned int Z : 1;
-        unsigned int I : 1;
-        unsigned int D : 1;
-        unsigned int V : 1;
-        unsigned int N : 1;
-
-        // B flag isn't memory: just reflects cause of the flag spill
-    } flags;
+    Flags flags;
 
     uint8_t read_flags(bool breakp=false) const {
         return flags.C |
@@ -67,18 +79,20 @@ struct RegisterFile {
 extern void run_instr(RegisterFile&, Memory&);
 
 #define MNEMONICS() \
- MNEMONIC(BRK) \
- MNEMONIC(ORA)
+ MNEMONIC(BRK, 0) \
+ MNEMONIC(ORA, (flags::Z | flags::N)) \
+ MNEMONIC(ASL, (flags::Z | flags::N | flags:: C)) \
 
 enum Mnemonic {
-#define MNEMONIC(x)\
-        x,
+#define MNEMONIC(mnem, _flags)\
+        mnem,
 MNEMONICS()
 #undef MNEMONIC
 };
 
 #define OPCODES() \
  OPCODE(BRK, 0x00, IMPLIED)       \
+                                  \
  OPCODE(ORA, 0x01, X_IND)         \
  OPCODE(ORA, 0x05, ZPG)           \
  OPCODE(ORA, 0x09, IMMEDIATE)     \
@@ -87,6 +101,13 @@ MNEMONICS()
  OPCODE(ORA, 0x15, ZPG_X)         \
  OPCODE(ORA, 0x19, ABS_Y)         \
  OPCODE(ORA, 0x1d, ABS_X)         \
+                                  \
+ OPCODE(ASL, 0x0a, ACCUMULATOR)   \
+ OPCODE(ASL, 0x06, ZPG)           \
+ OPCODE(ASL, 0x16, ZPG_X)         \
+ OPCODE(ASL, 0x0e, ABS)           \
+ OPCODE(ASL, 0x1e, ABS_X)
+
 
 // Name, bytes of instruction stream consumned
 #define ADDRESSING_MODES() \

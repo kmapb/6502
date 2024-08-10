@@ -23,19 +23,21 @@ TEST(Opcode, BRK) {
 }
 
 TEST(Opcode, ORA) {
-    RegisterFile regs;
-    Memory mem;
-    Assembler a(mem);
+    for (auto or_value : { 0, 1, 0xff }) {
+        RegisterFile regs;
+        Memory mem;
+        Assembler a(mem);
 
-    regs.PC = 0x300;
-    a
-    .org(regs.PC)
-    (ORA, X_IND, 0xff);
-    regs.PC = 0x300;
-    EXPECT_EQ(mem[0x300], 0x01); // ORA X_IMD
-    regs.SP = 0xf8;
+        regs.PC = 0x300;
+        a
+            .org(regs.PC)(ORA, X_IND, 0xff);
+        regs.PC = 0x300;
+        EXPECT_EQ(mem[0x300], 0x01); // ORA X_IMD
+        run_instr(regs, mem);
 
-    run_instr(regs, mem);
+        EXPECT_EQ(regs.flags.Z, or_value == 0);
+        EXPECT_EQ(regs.flags.N, (or_value & 0x80)== 1);
+    }
 }
 
 }

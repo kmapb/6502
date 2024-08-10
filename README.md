@@ -1,4 +1,4 @@
-Beginning a 6502 emulator.
+Work-in-progress 6502 emulator.
 
 Needs gtest meson wrap to build:
 

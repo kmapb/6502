@@ -126,6 +126,13 @@ void push_status(RegisterFile& regs, Memory& mem, bool breakp=false) {
     push8(regs, mem, regs.read_flags(breakp));
 }
 
+void
+set_flags(RegisterFile& regs, uint8_t oldA, uint8_t newA, uint8_t mask) {
+    if (mask & flags::N) regs.flags.N = (newA >> 7);
+    if (mask & flags::Z) regs.flags.Z = (newA == 0);
+    if (mask && flags::C) regs.flags.C = (oldA >> 7);
+}
+
 // Opcode implementations
 uint16_t
 op_BRK(RegisterFile& regs, Memory& mem, AddressingMode mode) {
@@ -136,31 +143,38 @@ op_BRK(RegisterFile& regs, Memory& mem, AddressingMode mode) {
 
 uint16_t
 op_ORA(RegisterFile& regs, Memory& mem, AddressingMode mode) {
-    auto newA = regs.A | operand(regs, mem, mode);
-    regs.A = newA;
-    regs.flags.Z = newA >> 7;
-    // Return PC?
+    regs.A |= operand(regs, mem, mode);
     return regs.PC + addressing_mode_to_length(mode);
+};
+
+uint16_t
+op_ASL(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    regs.A = uint8_t(regs.A << operand(regs, mem, mode));
+    return regs.PC + addressing_mode_to_length(mode);
+}
+
+static int instrs_to_flags[] = {
+#define MNEMONIC(mnem, flags) \
+    flags,
+MNEMONICS()
+#undef MNEMONIC
 };
 
 void
 run_instr(RegisterFile& regs, Memory& mem) {
     auto opcode = mem[regs.PC];
     switch(opcode) {
-#define OPCODE(name, opcode, mode) \
-    case opcode: \
-    regs.PC = op_ ## name(regs, mem, mode); \
+#define OPCODE(mnem, opcode, mode) \
+    case opcode: {\
+    auto oldA = regs.A; \
+    regs.PC = op_ ## mnem(regs, mem, mode); \
+    auto newA = regs.A; \
+    set_flags(regs, oldA, newA, instrs_to_flags[mnem]); \
+    } \
     return;
 
 OPCODES()
 #undef OPCODE
     }
 }
-
-enum opcode_bytes {
-#define OPCODE(name, opcode, mode) \
-    OPCODE_ ## name ## _ ## mode = opcode,
-    OPCODES()
-#undef OPCODE
-};
 
