@@ -149,7 +149,7 @@ op_ORA(RegisterFile& regs, Memory& mem, AddressingMode mode) {
 
 uint16_t
 op_ASL(RegisterFile& regs, Memory& mem, AddressingMode mode) {
-    regs.A = uint8_t(regs.A << operand(regs, mem, mode));
+    regs.A = uint8_t(operand(regs, mem, mode) << 1);
     return regs.PC + addressing_mode_to_length(mode);
 }
 

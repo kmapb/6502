@@ -14,7 +14,7 @@ assemble_instr(Mnemonic mnem, AddressingMode mode, uint16_t dir16, uint8_t* dest
             *destination++ = (dir16 & 0xff00) >> 8;
         }
     }
-    assert(len > 0 && len < 3);
+    assert(len > 0 && len <= 3);
     return len;
 }
 
