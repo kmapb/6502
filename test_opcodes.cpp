@@ -456,6 +456,163 @@ TEST(Opcode, ORA_does_not_modify_carry) {
     EXPECT_EQ(regs.flags.C, 0);  // Carry should NOT be modified by ORA
 }
 
+// Flag instruction tests
+TEST(Opcode, CLC) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.flags.C = 1;
+
+    a.org(0x300)
+    (CLC, IMPLIED, 0);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.flags.C, 0);
+    EXPECT_EQ(regs.PC, 0x301);
+}
+
+TEST(Opcode, SEC) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.flags.C = 0;
+
+    a.org(0x300)
+    (SEC, IMPLIED, 0);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.flags.C, 1);
+}
+
+TEST(Opcode, CLD) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.flags.D = 1;
+
+    a.org(0x300)
+    (CLD, IMPLIED, 0);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.flags.D, 0);
+}
+
+TEST(Opcode, SED) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.flags.D = 0;
+
+    a.org(0x300)
+    (SED, IMPLIED, 0);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.flags.D, 1);
+}
+
+TEST(Opcode, CLI) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.flags.I = 1;
+
+    a.org(0x300)
+    (CLI, IMPLIED, 0);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.flags.I, 0);
+}
+
+TEST(Opcode, SEI) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.flags.I = 0;
+
+    a.org(0x300)
+    (SEI, IMPLIED, 0);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.flags.I, 1);
+}
+
+TEST(Opcode, CLV) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.flags.V = 1;
+
+    a.org(0x300)
+    (CLV, IMPLIED, 0);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.flags.V, 0);
+}
+
+// SEC + SBC integration: verify SEC before SBC pattern
+TEST(Opcode, SEC_SBC_pattern) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0x50;
+    regs.flags.C = 0;  // Start with carry clear
+
+    a.org(0x300)
+    (SEC, IMPLIED, 0)
+    (SBC, IMMEDIATE, 0x10);
+
+    run_instr(regs, mem);  // SEC
+    EXPECT_EQ(regs.flags.C, 1);
+
+    run_instr(regs, mem);  // SBC
+    EXPECT_EQ(regs.A, 0x40);  // 0x50 - 0x10 = 0x40
+    EXPECT_EQ(regs.flags.C, 1);  // No borrow
+}
+
+// CLC + ADC integration: verify CLC before ADC pattern
+TEST(Opcode, CLC_ADC_pattern) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0x50;
+    regs.flags.C = 1;  // Start with carry set
+
+    a.org(0x300)
+    (CLC, IMPLIED, 0)
+    (ADC, IMMEDIATE, 0x10);
+
+    run_instr(regs, mem);  // CLC
+    EXPECT_EQ(regs.flags.C, 0);
+
+    run_instr(regs, mem);  // ADC
+    EXPECT_EQ(regs.A, 0x60);  // 0x50 + 0x10 = 0x60
+}
+
 // INC tests
 TEST(Opcode, INC_ZPG) {
     RegisterFile regs;

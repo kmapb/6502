@@ -304,6 +304,48 @@ op_STY(RegisterFile& regs, Memory& mem, AddressingMode mode) {
 }
 
 uint16_t
+op_CLC(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    regs.flags.C = 0;
+    return regs.PC + 1;
+}
+
+uint16_t
+op_CLD(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    regs.flags.D = 0;
+    return regs.PC + 1;
+}
+
+uint16_t
+op_CLI(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    regs.flags.I = 0;
+    return regs.PC + 1;
+}
+
+uint16_t
+op_CLV(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    regs.flags.V = 0;
+    return regs.PC + 1;
+}
+
+uint16_t
+op_SEC(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    regs.flags.C = 1;
+    return regs.PC + 1;
+}
+
+uint16_t
+op_SED(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    regs.flags.D = 1;
+    return regs.PC + 1;
+}
+
+uint16_t
+op_SEI(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    regs.flags.I = 1;
+    return regs.PC + 1;
+}
+
+uint16_t
 op_INC(RegisterFile& regs, Memory& mem, AddressingMode mode) {
     uint16_t addr = effective_address(regs, mem, mode);
     uint8_t val = ++mem.bytes[addr];
@@ -686,6 +728,14 @@ const Opcode opcodeTable[] = {
  {INY, 0xc8, IMPLIED},
  {DEX, 0xca, IMPLIED},
  {DEY, 0x88, IMPLIED},
+
+ {CLC, 0x18, IMPLIED},
+ {CLD, 0xd8, IMPLIED},
+ {CLI, 0x58, IMPLIED},
+ {CLV, 0xb8, IMPLIED},
+ {SEC, 0x38, IMPLIED},
+ {SED, 0xf8, IMPLIED},
+ {SEI, 0x78, IMPLIED},
 };
 
 const Opcode&
@@ -818,6 +868,27 @@ execute_opcode(const Opcode& opcode, RegisterFile& regs, Memory& mem) {
             break;
         case DEY:
             regs.PC = op_DEY(regs, mem, opcode.mode);
+            break;
+        case CLC:
+            regs.PC = op_CLC(regs, mem, opcode.mode);
+            break;
+        case CLD:
+            regs.PC = op_CLD(regs, mem, opcode.mode);
+            break;
+        case CLI:
+            regs.PC = op_CLI(regs, mem, opcode.mode);
+            break;
+        case CLV:
+            regs.PC = op_CLV(regs, mem, opcode.mode);
+            break;
+        case SEC:
+            regs.PC = op_SEC(regs, mem, opcode.mode);
+            break;
+        case SED:
+            regs.PC = op_SED(regs, mem, opcode.mode);
+            break;
+        case SEI:
+            regs.PC = op_SEI(regs, mem, opcode.mode);
             break;
         default:
             NOT_REACHED();

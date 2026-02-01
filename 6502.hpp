@@ -117,6 +117,13 @@ extern void run_instr(RegisterFile&, Memory&);
  MNEMONIC(INY, 0) \
  MNEMONIC(DEX, 0) \
  MNEMONIC(DEY, 0) \
+ MNEMONIC(CLC, 0) \
+ MNEMONIC(CLD, 0) \
+ MNEMONIC(CLI, 0) \
+ MNEMONIC(CLV, 0) \
+ MNEMONIC(SEC, 0) \
+ MNEMONIC(SED, 0) \
+ MNEMONIC(SEI, 0) \
 
 enum Mnemonic {
 #define MNEMONIC(mnem, _flags)\
