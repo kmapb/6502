@@ -103,6 +103,14 @@ extern void run_instr(RegisterFile&, Memory&);
  MNEMONIC(STA, 0) \
  MNEMONIC(STX, 0) \
  MNEMONIC(STY, 0) \
+ MNEMONIC(BCC, 0) \
+ MNEMONIC(BCS, 0) \
+ MNEMONIC(BEQ, 0) \
+ MNEMONIC(BMI, 0) \
+ MNEMONIC(BNE, 0) \
+ MNEMONIC(BPL, 0) \
+ MNEMONIC(BVC, 0) \
+ MNEMONIC(BVS, 0) \
 
 enum Mnemonic {
 #define MNEMONIC(mnem, _flags)\

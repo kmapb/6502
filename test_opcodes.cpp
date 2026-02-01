@@ -456,6 +456,293 @@ TEST(Opcode, ORA_does_not_modify_carry) {
     EXPECT_EQ(regs.flags.C, 0);  // Carry should NOT be modified by ORA
 }
 
+// BCC tests (Branch if Carry Clear)
+TEST(Opcode, BCC_taken_forward) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.flags.C = 0;  // Carry clear - branch should be taken
+
+    a.org(0x300)
+    (BCC, REL, 0x10);  // Branch forward 16 bytes
+
+    EXPECT_EQ(mem[0x300], 0x90);  // BCC opcode
+    run_instr(regs, mem);
+
+    // Target = PC + 2 + offset = 0x300 + 2 + 0x10 = 0x312
+    EXPECT_EQ(regs.PC, 0x312);
+}
+
+TEST(Opcode, BCC_taken_backward) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x320;
+    regs.flags.C = 0;  // Carry clear - branch should be taken
+
+    a.org(0x320)
+    (BCC, REL, 0xf0);  // Branch backward 16 bytes (-16 = 0xf0 in signed)
+
+    run_instr(regs, mem);
+
+    // Target = PC + 2 + offset = 0x320 + 2 + (-16) = 0x312
+    EXPECT_EQ(regs.PC, 0x312);
+}
+
+TEST(Opcode, BCC_not_taken) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.flags.C = 1;  // Carry set - branch should NOT be taken
+
+    a.org(0x300)
+    (BCC, REL, 0x10);
+
+    run_instr(regs, mem);
+
+    // Not taken: PC = PC + 2 (instruction length)
+    EXPECT_EQ(regs.PC, 0x302);
+}
+
+TEST(Opcode, BCC_zero_offset) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.flags.C = 0;
+
+    a.org(0x300)
+    (BCC, REL, 0x00);  // Branch with zero offset
+
+    run_instr(regs, mem);
+
+    // Target = PC + 2 + 0 = 0x302
+    EXPECT_EQ(regs.PC, 0x302);
+}
+
+// BCS tests (Branch if Carry Set)
+TEST(Opcode, BCS_taken) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.flags.C = 1;
+
+    a.org(0x300)
+    (BCS, REL, 0x10);
+
+    run_instr(regs, mem);
+    EXPECT_EQ(regs.PC, 0x312);
+}
+
+TEST(Opcode, BCS_not_taken) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.flags.C = 0;
+
+    a.org(0x300)
+    (BCS, REL, 0x10);
+
+    run_instr(regs, mem);
+    EXPECT_EQ(regs.PC, 0x302);
+}
+
+// BEQ tests (Branch if Equal / Zero set)
+TEST(Opcode, BEQ_taken) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.flags.Z = 1;
+
+    a.org(0x300)
+    (BEQ, REL, 0x10);
+
+    run_instr(regs, mem);
+    EXPECT_EQ(regs.PC, 0x312);
+}
+
+TEST(Opcode, BEQ_not_taken) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.flags.Z = 0;
+
+    a.org(0x300)
+    (BEQ, REL, 0x10);
+
+    run_instr(regs, mem);
+    EXPECT_EQ(regs.PC, 0x302);
+}
+
+// BNE tests (Branch if Not Equal / Zero clear)
+TEST(Opcode, BNE_taken) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.flags.Z = 0;
+
+    a.org(0x300)
+    (BNE, REL, 0x10);
+
+    run_instr(regs, mem);
+    EXPECT_EQ(regs.PC, 0x312);
+}
+
+TEST(Opcode, BNE_not_taken) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.flags.Z = 1;
+
+    a.org(0x300)
+    (BNE, REL, 0x10);
+
+    run_instr(regs, mem);
+    EXPECT_EQ(regs.PC, 0x302);
+}
+
+// BMI tests (Branch if Minus / N set)
+TEST(Opcode, BMI_taken) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.flags.N = 1;
+
+    a.org(0x300)
+    (BMI, REL, 0x10);
+
+    run_instr(regs, mem);
+    EXPECT_EQ(regs.PC, 0x312);
+}
+
+TEST(Opcode, BMI_not_taken) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.flags.N = 0;
+
+    a.org(0x300)
+    (BMI, REL, 0x10);
+
+    run_instr(regs, mem);
+    EXPECT_EQ(regs.PC, 0x302);
+}
+
+// BPL tests (Branch if Plus / N clear)
+TEST(Opcode, BPL_taken) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.flags.N = 0;
+
+    a.org(0x300)
+    (BPL, REL, 0x10);
+
+    run_instr(regs, mem);
+    EXPECT_EQ(regs.PC, 0x312);
+}
+
+TEST(Opcode, BPL_not_taken) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.flags.N = 1;
+
+    a.org(0x300)
+    (BPL, REL, 0x10);
+
+    run_instr(regs, mem);
+    EXPECT_EQ(regs.PC, 0x302);
+}
+
+// BVC tests (Branch if Overflow Clear)
+TEST(Opcode, BVC_taken) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.flags.V = 0;
+
+    a.org(0x300)
+    (BVC, REL, 0x10);
+
+    run_instr(regs, mem);
+    EXPECT_EQ(regs.PC, 0x312);
+}
+
+TEST(Opcode, BVC_not_taken) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.flags.V = 1;
+
+    a.org(0x300)
+    (BVC, REL, 0x10);
+
+    run_instr(regs, mem);
+    EXPECT_EQ(regs.PC, 0x302);
+}
+
+// BVS tests (Branch if Overflow Set)
+TEST(Opcode, BVS_taken) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.flags.V = 1;
+
+    a.org(0x300)
+    (BVS, REL, 0x10);
+
+    run_instr(regs, mem);
+    EXPECT_EQ(regs.PC, 0x312);
+}
+
+TEST(Opcode, BVS_not_taken) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.flags.V = 0;
+
+    a.org(0x300)
+    (BVS, REL, 0x10);
+
+    run_instr(regs, mem);
+    EXPECT_EQ(regs.PC, 0x302);
+}
+
 // LDA tests
 TEST(Opcode, LDA_IMM) {
     RegisterFile regs;

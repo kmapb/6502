@@ -303,6 +303,78 @@ op_STY(RegisterFile& regs, Memory& mem, AddressingMode mode) {
     return regs.PC + addressing_mode_to_length(mode);
 }
 
+// Helper for branch instructions: calculates target address
+// Offset is signed and relative to PC+2 (address after the branch instruction)
+static inline uint16_t
+branch_target(RegisterFile& regs, Memory& mem) {
+    int8_t offset = int8_t(mem.bytes[regs.PC + 1]);
+    return (regs.PC + 2 + offset) & 0xffff;
+}
+
+uint16_t
+op_BCC(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    if (regs.flags.C == 0) {
+        return branch_target(regs, mem);
+    }
+    return regs.PC + 2;
+}
+
+uint16_t
+op_BCS(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    if (regs.flags.C == 1) {
+        return branch_target(regs, mem);
+    }
+    return regs.PC + 2;
+}
+
+uint16_t
+op_BEQ(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    if (regs.flags.Z == 1) {
+        return branch_target(regs, mem);
+    }
+    return regs.PC + 2;
+}
+
+uint16_t
+op_BMI(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    if (regs.flags.N == 1) {
+        return branch_target(regs, mem);
+    }
+    return regs.PC + 2;
+}
+
+uint16_t
+op_BNE(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    if (regs.flags.Z == 0) {
+        return branch_target(regs, mem);
+    }
+    return regs.PC + 2;
+}
+
+uint16_t
+op_BPL(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    if (regs.flags.N == 0) {
+        return branch_target(regs, mem);
+    }
+    return regs.PC + 2;
+}
+
+uint16_t
+op_BVC(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    if (regs.flags.V == 0) {
+        return branch_target(regs, mem);
+    }
+    return regs.PC + 2;
+}
+
+uint16_t
+op_BVS(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    if (regs.flags.V == 1) {
+        return branch_target(regs, mem);
+    }
+    return regs.PC + 2;
+}
+
 uint16_t
 op_JMP(RegisterFile& regs, Memory& mem, AddressingMode mode) {
     if (mode == ABS) {
@@ -540,6 +612,15 @@ const Opcode opcodeTable[] = {
  {STY, 0x84, ZPG},
  {STY, 0x94, ZPG_X},
  {STY, 0x8c, ABS},
+
+ {BCC, 0x90, REL},
+ {BCS, 0xb0, REL},
+ {BEQ, 0xf0, REL},
+ {BMI, 0x30, REL},
+ {BNE, 0xd0, REL},
+ {BPL, 0x10, REL},
+ {BVC, 0x50, REL},
+ {BVS, 0x70, REL},
 };
 
 const Opcode&
@@ -630,6 +711,30 @@ execute_opcode(const Opcode& opcode, RegisterFile& regs, Memory& mem) {
             break;
         case STY:
             regs.PC = op_STY(regs, mem, opcode.mode);
+            break;
+        case BCC:
+            regs.PC = op_BCC(regs, mem, opcode.mode);
+            break;
+        case BCS:
+            regs.PC = op_BCS(regs, mem, opcode.mode);
+            break;
+        case BEQ:
+            regs.PC = op_BEQ(regs, mem, opcode.mode);
+            break;
+        case BMI:
+            regs.PC = op_BMI(regs, mem, opcode.mode);
+            break;
+        case BNE:
+            regs.PC = op_BNE(regs, mem, opcode.mode);
+            break;
+        case BPL:
+            regs.PC = op_BPL(regs, mem, opcode.mode);
+            break;
+        case BVC:
+            regs.PC = op_BVC(regs, mem, opcode.mode);
+            break;
+        case BVS:
+            regs.PC = op_BVS(regs, mem, opcode.mode);
             break;
         default:
             NOT_REACHED();
