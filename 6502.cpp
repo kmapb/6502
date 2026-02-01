@@ -50,17 +50,17 @@ operand(RegisterFile& regs, Memory& mem, AddressingMode mode) {
     case ABS: {
         auto ll = mem.bytes[regs.PC + 1];
         auto hh = mem.bytes[regs.PC + 2];
-        return ll + (hh << 8);
+        return mem.bytes[ll + (hh << 8)];
     }
     case ABS_X: {
         auto ll = mem.bytes[regs.PC + 1];
         auto hh = mem.bytes[regs.PC + 2];
-        return regs.X + ll + (hh << 8);
+        return mem.bytes[regs.X + ll + (hh << 8)];
     }
     case ABS_Y: {
         auto ll = mem.bytes[regs.PC + 1];
         auto hh = mem.bytes[regs.PC + 2];
-        return regs.Y + ll + (hh << 8);
+        return mem.bytes[regs.Y + ll + (hh << 8)];
     }
     case IMMEDIATE: {
         return mem.bytes[regs.PC + 1];
@@ -77,11 +77,13 @@ operand(RegisterFile& regs, Memory& mem, AddressingMode mode) {
         auto addr_low = mem.bytes[regs.PC + 1];
         auto ll = mem.bytes[(addr_low + regs.X) & 0xff];
         auto hh = mem.bytes[(addr_low + regs.X + 1) & 0xff];
-        return ll + (hh << 8);
+        return mem.bytes[ll + (hh << 8)];
     }
     case IND_Y: {
-        auto addr_low = mem.bytes[regs.PC + 1];
-        return mem.bytes[addr_low] + mem.bytes[addr_low + 1] + regs.Y;
+        auto zp_addr = mem.bytes[regs.PC + 1];
+        auto ll = mem.bytes[zp_addr];
+        auto hh = mem.bytes[(zp_addr + 1) & 0xff];
+        return mem.bytes[(ll + (hh << 8) + regs.Y) & 0xffff];
     }
     case REL: {
         int8_t disp = int8_t(mem.bytes[regs.PC + 1]);
@@ -98,6 +100,51 @@ operand(RegisterFile& regs, Memory& mem, AddressingMode mode) {
     case ZPG_Y: {
         uint8_t addr = mem.bytes[regs.PC + 1] + regs.Y;
         return mem.bytes[addr];
+    }
+    default: return 0;
+    }
+}
+
+// Returns the effective address for memory-based addressing modes
+// For ACCUMULATOR/IMMEDIATE/IMPLIED, returns 0 (not meaningful)
+static inline uint16_t
+effective_address(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    switch(mode) {
+    case ABS: {
+        auto ll = mem.bytes[regs.PC + 1];
+        auto hh = mem.bytes[regs.PC + 2];
+        return ll + (hh << 8);
+    }
+    case ABS_X: {
+        auto ll = mem.bytes[regs.PC + 1];
+        auto hh = mem.bytes[regs.PC + 2];
+        return (regs.X + ll + (hh << 8)) & 0xffff;
+    }
+    case ABS_Y: {
+        auto ll = mem.bytes[regs.PC + 1];
+        auto hh = mem.bytes[regs.PC + 2];
+        return (regs.Y + ll + (hh << 8)) & 0xffff;
+    }
+    case X_IND: {
+        auto addr_low = mem.bytes[regs.PC + 1];
+        auto ll = mem.bytes[(addr_low + regs.X) & 0xff];
+        auto hh = mem.bytes[(addr_low + regs.X + 1) & 0xff];
+        return ll + (hh << 8);
+    }
+    case IND_Y: {
+        auto zp_addr = mem.bytes[regs.PC + 1];
+        auto ll = mem.bytes[zp_addr];
+        auto hh = mem.bytes[(zp_addr + 1) & 0xff];
+        return (ll + (hh << 8) + regs.Y) & 0xffff;
+    }
+    case ZPG: {
+        return mem.bytes[regs.PC + 1];
+    }
+    case ZPG_X: {
+        return (mem.bytes[regs.PC + 1] + regs.X) & 0xff;
+    }
+    case ZPG_Y: {
+        return (mem.bytes[regs.PC + 1] + regs.Y) & 0xff;
     }
     default: return 0;
     }
@@ -149,7 +196,20 @@ op_ORA(RegisterFile& regs, Memory& mem, AddressingMode mode) {
 
 uint16_t
 op_ASL(RegisterFile& regs, Memory& mem, AddressingMode mode) {
-    regs.A = uint8_t(operand(regs, mem, mode) << 1);
+    uint8_t old_val, new_val;
+    if (mode == ACCUMULATOR) {
+        old_val = regs.A;
+        new_val = uint8_t(old_val << 1);
+        regs.A = new_val;
+    } else {
+        uint16_t addr = effective_address(regs, mem, mode);
+        old_val = mem.bytes[addr];
+        new_val = uint8_t(old_val << 1);
+        mem.bytes[addr] = new_val;
+    }
+    regs.flags.C = (old_val >> 7) & 1;
+    regs.flags.N = (new_val >> 7) & 1;
+    regs.flags.Z = (new_val == 0);
     return regs.PC + addressing_mode_to_length(mode);
 }
 

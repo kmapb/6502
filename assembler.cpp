@@ -10,7 +10,7 @@ assemble_instr(Mnemonic mnem, AddressingMode mode, uint16_t dir16, uint8_t* dest
     *destination++ = opcode.byte;
     if (len > 1) {
         *destination++ = dir16 & 0xff;
-        if (len == 2) {
+        if (len == 3) {
             *destination++ = (dir16 & 0xff00) >> 8;
         }
     }

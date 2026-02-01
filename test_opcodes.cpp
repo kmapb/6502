@@ -43,6 +43,176 @@ TEST(Opcode, ORA) {
     }
 }
 
+TEST(Opcode, ORA_IND_Y) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0x0f;
+    regs.Y = 0x10;
+    // ($20),Y -> read pointer from $20,$21, then add Y
+    mem[0x20] = 0x00;  // Low byte of base address
+    mem[0x21] = 0x12;  // High byte of base address -> $1200
+    mem[0x1210] = 0xf0;  // Value at $1200 + Y ($10) = $1210
+
+    a.org(0x300)
+    (ORA, IND_Y, 0x20);  // ORA ($20),Y
+
+    EXPECT_EQ(mem[0x300], 0x11);  // ORA IND_Y opcode
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0xff);      // 0x0f | 0xf0 = 0xff
+    EXPECT_EQ(regs.PC, 0x302);    // Advanced by 2 bytes
+}
+
+TEST(Opcode, ORA_X_IND) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0x0f;
+    regs.X = 0x10;
+    // ($20,X) with X=0x10 -> read pointer from $30,$31
+    mem[0x30] = 0x34;  // Low byte of target address
+    mem[0x31] = 0x12;  // High byte of target address
+    mem[0x1234] = 0xf0;  // Value at target address
+
+    a.org(0x300)
+    (ORA, X_IND, 0x20);  // ORA ($20,X)
+
+    EXPECT_EQ(mem[0x300], 0x01);  // ORA X_IND opcode
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0xff);      // 0x0f | 0xf0 = 0xff
+    EXPECT_EQ(regs.PC, 0x302);    // Advanced by 2 bytes
+}
+
+TEST(Opcode, ORA_ABS_X) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0x0f;
+    regs.X = 0x10;
+    mem[0x1244] = 0xf0;  // Value at $1234 + X ($10) = $1244
+
+    a.org(0x300)
+    (ORA, ABS_X, 0x1234);  // ORA $1234,X
+
+    EXPECT_EQ(mem[0x300], 0x1d);  // ORA ABS_X opcode
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0xff);      // 0x0f | 0xf0 = 0xff
+    EXPECT_EQ(regs.PC, 0x303);    // Advanced by 3 bytes
+}
+
+TEST(Opcode, ORA_ABS_Y) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0x0f;
+    regs.Y = 0x20;
+    mem[0x1254] = 0xf0;  // Value at $1234 + Y ($20) = $1254
+
+    a.org(0x300)
+    (ORA, ABS_Y, 0x1234);  // ORA $1234,Y
+
+    EXPECT_EQ(mem[0x300], 0x19);  // ORA ABS_Y opcode
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0xff);      // 0x0f | 0xf0 = 0xff
+    EXPECT_EQ(regs.PC, 0x303);    // Advanced by 3 bytes
+}
+
+TEST(Opcode, ORA_ABS) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0x0f;
+    mem[0x1234] = 0xf0;  // Value at absolute address $1234
+
+    a.org(0x300)
+    (ORA, ABS, 0x1234);  // ORA $1234
+
+    EXPECT_EQ(mem[0x300], 0x0d);  // ORA ABS opcode
+    EXPECT_EQ(mem[0x301], 0x34);  // Low byte
+    EXPECT_EQ(mem[0x302], 0x12);  // High byte
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0xff);      // 0x0f | 0xf0 = 0xff
+    EXPECT_EQ(regs.PC, 0x303);    // Advanced by 3 bytes
+}
+
+TEST(Opcode, ORA_ZPG_X) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0x0f;
+    regs.X = 0x10;
+    mem[0x52] = 0xf0;  // Value at zero page address $42 + X ($10) = $52
+
+    a.org(0x300)
+    (ORA, ZPG_X, 0x42);  // ORA $42,X
+
+    EXPECT_EQ(mem[0x300], 0x15);  // ORA ZPG_X opcode
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0xff);      // 0x0f | 0xf0 = 0xff
+    EXPECT_EQ(regs.flags.N, 1);
+    EXPECT_EQ(regs.flags.Z, 0);
+    EXPECT_EQ(regs.PC, 0x302);    // Advanced by 2 bytes
+}
+
+// Test ZPG_X wraps within zero page (doesn't cross into page 1)
+TEST(Opcode, ORA_ZPG_X_wrap) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0x00;
+    regs.X = 0x20;
+    mem[0x10] = 0x42;   // $f0 + $20 = $110, but should wrap to $10
+    mem[0x110] = 0xff;  // This should NOT be read
+
+    a.org(0x300)
+    (ORA, ZPG_X, 0xf0);  // ORA $f0,X
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0x42);  // Should read from $10, not $110
+}
+
+TEST(Opcode, ORA_ZPG) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0x0f;
+    mem[0x42] = 0xf0;  // Value at zero page address $42
+
+    a.org(0x300)
+    (ORA, ZPG, 0x42);  // ORA $42
+
+    EXPECT_EQ(mem[0x300], 0x05);  // ORA ZPG opcode
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0xff);      // 0x0f | 0xf0 = 0xff
+    EXPECT_EQ(regs.flags.N, 1);   // Negative (bit 7 set)
+    EXPECT_EQ(regs.flags.Z, 0);   // Not zero
+    EXPECT_EQ(regs.PC, 0x302);    // Advanced by 2 bytes
+}
+
 // Test that ORA does not modify the carry flag (exposes bug at 6502.cpp:133)
 TEST(Opcode, ORA_does_not_modify_carry) {
     RegisterFile regs;
@@ -62,6 +232,91 @@ TEST(Opcode, ORA_does_not_modify_carry) {
     EXPECT_EQ(regs.flags.N, 1);  // Negative flag set (bit 7)
     EXPECT_EQ(regs.flags.Z, 0);  // Not zero
     EXPECT_EQ(regs.flags.C, 0);  // Carry should NOT be modified by ORA
+}
+
+TEST(Opcode, ASL_ABS) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    mem[0x1234] = 0x40;  // Value to shift
+
+    a.org(0x300)
+    (ASL, ABS, 0x1234);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(mem[0x1234], 0x80);  // 0x40 << 1 = 0x80
+    EXPECT_EQ(regs.flags.C, 0);
+    EXPECT_EQ(regs.flags.N, 1);    // Bit 7 set
+    EXPECT_EQ(regs.flags.Z, 0);
+    EXPECT_EQ(regs.PC, 0x303);
+}
+
+TEST(Opcode, ASL_ABS_X) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.X = 0x10;
+    mem[0x1244] = 0x01;  // Value at $1234 + X
+
+    a.org(0x300)
+    (ASL, ABS_X, 0x1234);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(mem[0x1244], 0x02);  // 0x01 << 1 = 0x02
+    EXPECT_EQ(regs.flags.C, 0);
+    EXPECT_EQ(regs.flags.N, 0);
+    EXPECT_EQ(regs.flags.Z, 0);
+    EXPECT_EQ(regs.PC, 0x303);
+}
+
+TEST(Opcode, ASL_ZPG_X) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.X = 0x10;
+    mem[0x52] = 0x80;  // Value at $42 + X, will shift to 0 with carry
+
+    a.org(0x300)
+    (ASL, ZPG_X, 0x42);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(mem[0x52], 0x00);   // 0x80 << 1 = 0x100, truncated to 0x00
+    EXPECT_EQ(regs.flags.C, 1);   // Carry set
+    EXPECT_EQ(regs.flags.N, 0);
+    EXPECT_EQ(regs.flags.Z, 1);   // Zero
+    EXPECT_EQ(regs.PC, 0x302);
+}
+
+TEST(Opcode, ASL_ZPG) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0x00;       // A should NOT be modified
+    mem[0x42] = 0x81;    // Value to shift (bit 7 set, bit 0 set)
+
+    a.org(0x300)
+    (ASL, ZPG, 0x42);    // ASL $42
+
+    EXPECT_EQ(mem[0x300], 0x06);  // ASL ZPG opcode
+    run_instr(regs, mem);
+
+    EXPECT_EQ(mem[0x42], 0x02);   // 0x81 << 1 = 0x102, truncated to 0x02
+    EXPECT_EQ(regs.A, 0x00);      // A should be unchanged
+    EXPECT_EQ(regs.flags.C, 1);   // Carry set (bit 7 shifted out)
+    EXPECT_EQ(regs.flags.Z, 0);   // Not zero
+    EXPECT_EQ(regs.flags.N, 0);   // Not negative
+    EXPECT_EQ(regs.PC, 0x302);    // Advanced by 2 bytes
 }
 
 TEST(Opcode, ASL) {
