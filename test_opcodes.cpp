@@ -565,6 +565,296 @@ TEST(Opcode, LDA_IND_Y) {
     EXPECT_EQ(regs.A, 0x77);
 }
 
+// LDX tests
+TEST(Opcode, LDX_IMM) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    a.org(0x300)
+    (LDX, IMMEDIATE, 0x42);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.X, 0x42);
+    EXPECT_EQ(regs.flags.N, 0);
+    EXPECT_EQ(regs.flags.Z, 0);
+}
+
+TEST(Opcode, LDX_zero_flag) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.X = 0xff;
+    a.org(0x300)
+    (LDX, IMMEDIATE, 0x00);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.X, 0x00);
+    EXPECT_EQ(regs.flags.Z, 1);
+}
+
+TEST(Opcode, LDX_negative_flag) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    a.org(0x300)
+    (LDX, IMMEDIATE, 0x80);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.X, 0x80);
+    EXPECT_EQ(regs.flags.N, 1);
+}
+
+TEST(Opcode, LDX_ZPG_Y) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.Y = 0x10;
+    mem[0x52] = 0xab;  // $42 + Y
+
+    a.org(0x300)
+    (LDX, ZPG_Y, 0x42);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.X, 0xab);
+}
+
+// LDY tests
+TEST(Opcode, LDY_IMM) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    a.org(0x300)
+    (LDY, IMMEDIATE, 0x42);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.Y, 0x42);
+    EXPECT_EQ(regs.flags.N, 0);
+    EXPECT_EQ(regs.flags.Z, 0);
+}
+
+TEST(Opcode, LDY_ZPG_X) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.X = 0x10;
+    mem[0x52] = 0xcd;  // $42 + X
+
+    a.org(0x300)
+    (LDY, ZPG_X, 0x42);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.Y, 0xcd);
+}
+
+// STA tests
+TEST(Opcode, STA_ZPG) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0x42;
+    mem[0x20] = 0x00;
+
+    a.org(0x300)
+    (STA, ZPG, 0x20);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(mem[0x20], 0x42);
+    EXPECT_EQ(regs.PC, 0x302);
+}
+
+TEST(Opcode, STA_ABS) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0x55;
+
+    a.org(0x300)
+    (STA, ABS, 0x1234);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(mem[0x1234], 0x55);
+    EXPECT_EQ(regs.PC, 0x303);
+}
+
+TEST(Opcode, STA_ABS_X) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0xaa;
+    regs.X = 0x10;
+
+    a.org(0x300)
+    (STA, ABS_X, 0x1234);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(mem[0x1244], 0xaa);  // $1234 + X
+}
+
+TEST(Opcode, STA_IND_Y) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0x77;
+    regs.Y = 0x10;
+    mem[0x20] = 0x00;
+    mem[0x21] = 0x12;  // Points to $1200
+
+    a.org(0x300)
+    (STA, IND_Y, 0x20);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(mem[0x1210], 0x77);  // $1200 + Y
+}
+
+// STX tests
+TEST(Opcode, STX_ZPG) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.X = 0x42;
+
+    a.org(0x300)
+    (STX, ZPG, 0x20);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(mem[0x20], 0x42);
+}
+
+TEST(Opcode, STX_ABS) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.X = 0xef;
+
+    a.org(0x300)
+    (STX, ABS, 0x1234);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(mem[0x1234], 0xef);
+}
+
+TEST(Opcode, STX_ZPG_Y) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.X = 0xbb;
+    regs.Y = 0x10;
+
+    a.org(0x300)
+    (STX, ZPG_Y, 0x20);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(mem[0x30], 0xbb);  // $20 + Y
+}
+
+// STY tests
+TEST(Opcode, STY_ZPG) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.Y = 0x42;
+
+    a.org(0x300)
+    (STY, ZPG, 0x20);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(mem[0x20], 0x42);
+}
+
+TEST(Opcode, STY_ABS) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.Y = 0xdc;
+
+    a.org(0x300)
+    (STY, ABS, 0x1234);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(mem[0x1234], 0xdc);
+}
+
+TEST(Opcode, STY_ZPG_X) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.Y = 0xcc;
+    regs.X = 0x10;
+
+    a.org(0x300)
+    (STY, ZPG_X, 0x20);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(mem[0x30], 0xcc);  // $20 + X
+}
+
+// Load/Store roundtrip
+TEST(Opcode, LDA_STA_roundtrip) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    mem[0x1000] = 0x42;
+
+    a.org(0x300)
+    (LDA, ABS, 0x1000)
+    (STA, ABS, 0x2000);
+
+    regs.PC = 0x300;
+    run_instr(regs, mem);  // LDA
+    run_instr(regs, mem);  // STA
+
+    EXPECT_EQ(mem[0x2000], 0x42);
+}
+
 // AND tests
 TEST(Opcode, AND_IMM) {
     RegisterFile regs;

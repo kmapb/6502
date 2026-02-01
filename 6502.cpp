@@ -267,6 +267,43 @@ op_LDA(RegisterFile& regs, Memory& mem, AddressingMode mode) {
 }
 
 uint16_t
+op_LDX(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    regs.X = operand(regs, mem, mode);
+    regs.flags.N = (regs.X >> 7) & 1;
+    regs.flags.Z = (regs.X == 0);
+    return regs.PC + addressing_mode_to_length(mode);
+}
+
+uint16_t
+op_LDY(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    regs.Y = operand(regs, mem, mode);
+    regs.flags.N = (regs.Y >> 7) & 1;
+    regs.flags.Z = (regs.Y == 0);
+    return regs.PC + addressing_mode_to_length(mode);
+}
+
+uint16_t
+op_STA(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    uint16_t addr = effective_address(regs, mem, mode);
+    mem.bytes[addr] = regs.A;
+    return regs.PC + addressing_mode_to_length(mode);
+}
+
+uint16_t
+op_STX(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    uint16_t addr = effective_address(regs, mem, mode);
+    mem.bytes[addr] = regs.X;
+    return regs.PC + addressing_mode_to_length(mode);
+}
+
+uint16_t
+op_STY(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    uint16_t addr = effective_address(regs, mem, mode);
+    mem.bytes[addr] = regs.Y;
+    return regs.PC + addressing_mode_to_length(mode);
+}
+
+uint16_t
 op_JMP(RegisterFile& regs, Memory& mem, AddressingMode mode) {
     if (mode == ABS) {
         auto ll = mem.bytes[regs.PC + 1];
@@ -475,6 +512,34 @@ const Opcode opcodeTable[] = {
  {LDA, 0xb5, ZPG_X},
  {LDA, 0xb9, ABS_Y},
  {LDA, 0xbd, ABS_X},
+
+ {LDX, 0xa2, IMMEDIATE},
+ {LDX, 0xa6, ZPG},
+ {LDX, 0xb6, ZPG_Y},
+ {LDX, 0xae, ABS},
+ {LDX, 0xbe, ABS_Y},
+
+ {LDY, 0xa0, IMMEDIATE},
+ {LDY, 0xa4, ZPG},
+ {LDY, 0xb4, ZPG_X},
+ {LDY, 0xac, ABS},
+ {LDY, 0xbc, ABS_X},
+
+ {STA, 0x81, X_IND},
+ {STA, 0x85, ZPG},
+ {STA, 0x8d, ABS},
+ {STA, 0x91, IND_Y},
+ {STA, 0x95, ZPG_X},
+ {STA, 0x99, ABS_Y},
+ {STA, 0x9d, ABS_X},
+
+ {STX, 0x86, ZPG},
+ {STX, 0x96, ZPG_Y},
+ {STX, 0x8e, ABS},
+
+ {STY, 0x84, ZPG},
+ {STY, 0x94, ZPG_X},
+ {STY, 0x8c, ABS},
 };
 
 const Opcode&
@@ -550,6 +615,21 @@ execute_opcode(const Opcode& opcode, RegisterFile& regs, Memory& mem) {
             break;
         case LDA:
             regs.PC = op_LDA(regs, mem, opcode.mode);
+            break;
+        case LDX:
+            regs.PC = op_LDX(regs, mem, opcode.mode);
+            break;
+        case LDY:
+            regs.PC = op_LDY(regs, mem, opcode.mode);
+            break;
+        case STA:
+            regs.PC = op_STA(regs, mem, opcode.mode);
+            break;
+        case STX:
+            regs.PC = op_STX(regs, mem, opcode.mode);
+            break;
+        case STY:
+            regs.PC = op_STY(regs, mem, opcode.mode);
             break;
         default:
             NOT_REACHED();

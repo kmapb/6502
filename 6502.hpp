@@ -98,6 +98,11 @@ extern void run_instr(RegisterFile&, Memory&);
  MNEMONIC(JSR, 0) \
  MNEMONIC(RTS, 0) \
  MNEMONIC(LDA, (flags::Z | flags::N)) \
+ MNEMONIC(LDX, 0) \
+ MNEMONIC(LDY, 0) \
+ MNEMONIC(STA, 0) \
+ MNEMONIC(STX, 0) \
+ MNEMONIC(STY, 0) \
 
 enum Mnemonic {
 #define MNEMONIC(mnem, _flags)\
