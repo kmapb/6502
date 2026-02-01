@@ -456,6 +456,115 @@ TEST(Opcode, ORA_does_not_modify_carry) {
     EXPECT_EQ(regs.flags.C, 0);  // Carry should NOT be modified by ORA
 }
 
+// LDA tests
+TEST(Opcode, LDA_IMM) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0x00;
+
+    a.org(0x300)
+    (LDA, IMMEDIATE, 0x42);
+
+    EXPECT_EQ(mem[0x300], 0xa9);  // LDA immediate opcode
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0x42);
+    EXPECT_EQ(regs.flags.N, 0);
+    EXPECT_EQ(regs.flags.Z, 0);
+    EXPECT_EQ(regs.PC, 0x302);
+}
+
+TEST(Opcode, LDA_zero) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0xff;
+
+    a.org(0x300)
+    (LDA, IMMEDIATE, 0x00);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0x00);
+    EXPECT_EQ(regs.flags.Z, 1);
+    EXPECT_EQ(regs.flags.N, 0);
+}
+
+TEST(Opcode, LDA_negative) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+
+    a.org(0x300)
+    (LDA, IMMEDIATE, 0x80);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0x80);
+    EXPECT_EQ(regs.flags.N, 1);
+    EXPECT_EQ(regs.flags.Z, 0);
+}
+
+TEST(Opcode, LDA_ABS) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    mem[0x1234] = 0x55;
+
+    a.org(0x300)
+    (LDA, ABS, 0x1234);
+
+    EXPECT_EQ(mem[0x300], 0xad);  // LDA absolute opcode
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0x55);
+    EXPECT_EQ(regs.PC, 0x303);
+}
+
+TEST(Opcode, LDA_ZPG) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    mem[0x42] = 0xaa;
+
+    a.org(0x300)
+    (LDA, ZPG, 0x42);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0xaa);
+}
+
+TEST(Opcode, LDA_IND_Y) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.Y = 0x10;
+    mem[0x20] = 0x00;   // Low byte of base
+    mem[0x21] = 0x12;   // High byte -> $1200
+    mem[0x1210] = 0x77; // Value at $1200 + Y
+
+    a.org(0x300)
+    (LDA, IND_Y, 0x20);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0x77);
+}
+
 // AND tests
 TEST(Opcode, AND_IMM) {
     RegisterFile regs;

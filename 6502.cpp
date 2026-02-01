@@ -261,6 +261,12 @@ op_RTI(RegisterFile& regs, Memory& mem, AddressingMode mode) {
 }
 
 uint16_t
+op_LDA(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    regs.A = operand(regs, mem, mode);
+    return regs.PC + addressing_mode_to_length(mode);
+}
+
+uint16_t
 op_JMP(RegisterFile& regs, Memory& mem, AddressingMode mode) {
     if (mode == ABS) {
         auto ll = mem.bytes[regs.PC + 1];
@@ -460,6 +466,15 @@ const Opcode opcodeTable[] = {
  {JSR, 0x20, ABS},
 
  {RTS, 0x60, IMPLIED},
+
+ {LDA, 0xa1, X_IND},
+ {LDA, 0xa5, ZPG},
+ {LDA, 0xa9, IMMEDIATE},
+ {LDA, 0xad, ABS},
+ {LDA, 0xb1, IND_Y},
+ {LDA, 0xb5, ZPG_X},
+ {LDA, 0xb9, ABS_Y},
+ {LDA, 0xbd, ABS_X},
 };
 
 const Opcode&
@@ -532,6 +547,9 @@ execute_opcode(const Opcode& opcode, RegisterFile& regs, Memory& mem) {
             break;
         case RTS:
             regs.PC = op_RTS(regs, mem, opcode.mode);
+            break;
+        case LDA:
+            regs.PC = op_LDA(regs, mem, opcode.mode);
             break;
         default:
             NOT_REACHED();

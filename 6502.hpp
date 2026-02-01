@@ -97,6 +97,7 @@ extern void run_instr(RegisterFile&, Memory&);
  MNEMONIC(JMP, 0) \
  MNEMONIC(JSR, 0) \
  MNEMONIC(RTS, 0) \
+ MNEMONIC(LDA, (flags::Z | flags::N)) \
 
 enum Mnemonic {
 #define MNEMONIC(mnem, _flags)\
