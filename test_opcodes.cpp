@@ -456,6 +456,341 @@ TEST(Opcode, ORA_does_not_modify_carry) {
     EXPECT_EQ(regs.flags.C, 0);  // Carry should NOT be modified by ORA
 }
 
+// CMP tests
+TEST(Opcode, CMP_equal) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0x42;
+
+    a.org(0x300)
+    (CMP, IMMEDIATE, 0x42);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0x42);  // A unchanged
+    EXPECT_EQ(regs.flags.Z, 1);
+    EXPECT_EQ(regs.flags.C, 1);  // A >= M
+    EXPECT_EQ(regs.flags.N, 0);
+}
+
+TEST(Opcode, CMP_greater) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0x50;
+
+    a.org(0x300)
+    (CMP, IMMEDIATE, 0x30);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.flags.Z, 0);
+    EXPECT_EQ(regs.flags.C, 1);  // A >= M
+    EXPECT_EQ(regs.flags.N, 0);  // 0x50 - 0x30 = 0x20
+}
+
+TEST(Opcode, CMP_less) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0x10;
+
+    a.org(0x300)
+    (CMP, IMMEDIATE, 0x20);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.flags.Z, 0);
+    EXPECT_EQ(regs.flags.C, 0);  // A < M, borrow
+    EXPECT_EQ(regs.flags.N, 1);  // 0x10 - 0x20 = 0xF0
+}
+
+TEST(Opcode, CMP_ABS) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0x42;
+    mem[0x1234] = 0x42;
+
+    a.org(0x300)
+    (CMP, ABS, 0x1234);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.flags.Z, 1);
+    EXPECT_EQ(regs.flags.C, 1);
+}
+
+// CPX tests
+TEST(Opcode, CPX_equal) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.X = 0x10;
+
+    a.org(0x300)
+    (CPX, IMMEDIATE, 0x10);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.flags.Z, 1);
+    EXPECT_EQ(regs.flags.C, 1);
+}
+
+TEST(Opcode, CPX_less) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.X = 0x05;
+
+    a.org(0x300)
+    (CPX, IMMEDIATE, 0x10);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.flags.Z, 0);
+    EXPECT_EQ(regs.flags.C, 0);
+}
+
+// CPY tests
+TEST(Opcode, CPY_equal) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.Y = 0x10;
+
+    a.org(0x300)
+    (CPY, IMMEDIATE, 0x10);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.flags.Z, 1);
+    EXPECT_EQ(regs.flags.C, 1);
+}
+
+TEST(Opcode, CPY_greater) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.Y = 0x20;
+
+    a.org(0x300)
+    (CPY, IMMEDIATE, 0x10);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.flags.Z, 0);
+    EXPECT_EQ(regs.flags.C, 1);
+}
+
+// PHA / PLA tests
+TEST(Opcode, PHA_PLA_roundtrip) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.SP = 0xff;
+    regs.A = 0x42;
+
+    a.org(0x300)
+    (PHA, IMPLIED, 0)
+    (LDA, IMMEDIATE, 0x00)  // Clear A
+    (PLA, IMPLIED, 0);
+
+    run_instr(regs, mem);  // PHA
+    EXPECT_EQ(regs.SP, 0xfe);
+
+    run_instr(regs, mem);  // LDA #$00
+    EXPECT_EQ(regs.A, 0x00);
+
+    run_instr(regs, mem);  // PLA
+    EXPECT_EQ(regs.A, 0x42);
+    EXPECT_EQ(regs.SP, 0xff);
+    EXPECT_EQ(regs.flags.N, 0);
+    EXPECT_EQ(regs.flags.Z, 0);
+}
+
+TEST(Opcode, PLA_flags) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.SP = 0xff;
+    regs.A = 0x00;
+
+    // Push 0, pull it back to test Z flag
+    a.org(0x300)
+    (PHA, IMPLIED, 0)
+    (PLA, IMPLIED, 0);
+
+    run_instr(regs, mem);  // PHA
+    run_instr(regs, mem);  // PLA
+
+    EXPECT_EQ(regs.A, 0x00);
+    EXPECT_EQ(regs.flags.Z, 1);
+}
+
+// PHP / PLP tests
+TEST(Opcode, PHP_PLP_roundtrip) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.SP = 0xff;
+    regs.flags.C = 1;
+    regs.flags.Z = 0;
+    regs.flags.I = 1;
+    regs.flags.D = 0;
+    regs.flags.V = 1;
+    regs.flags.N = 0;
+
+    a.org(0x300)
+    (PHP, IMPLIED, 0)
+    (PLP, IMPLIED, 0);
+
+    run_instr(regs, mem);  // PHP
+
+    // Scramble all flags
+    regs.flags.C = 0;
+    regs.flags.Z = 1;
+    regs.flags.I = 0;
+    regs.flags.D = 1;
+    regs.flags.V = 0;
+    regs.flags.N = 1;
+
+    run_instr(regs, mem);  // PLP - should restore original flags
+
+    EXPECT_EQ(regs.flags.C, 1);
+    EXPECT_EQ(regs.flags.Z, 0);
+    EXPECT_EQ(regs.flags.I, 1);
+    EXPECT_EQ(regs.flags.D, 0);
+    EXPECT_EQ(regs.flags.V, 1);
+    EXPECT_EQ(regs.flags.N, 0);
+}
+
+// BIT tests
+TEST(Opcode, BIT_zero_result) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0x0f;
+    mem[0x42] = 0xf0;  // No bits in common with A
+
+    a.org(0x300)
+    (BIT, ZPG, 0x42);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0x0f);  // A unchanged
+    EXPECT_EQ(regs.flags.Z, 1);  // A & M == 0
+    EXPECT_EQ(regs.flags.N, 1);  // M bit 7 set
+    EXPECT_EQ(regs.flags.V, 1);  // M bit 6 set
+}
+
+TEST(Opcode, BIT_nonzero_result) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0xff;
+    mem[0x42] = 0x3f;  // bits 6,7 clear
+
+    a.org(0x300)
+    (BIT, ZPG, 0x42);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.flags.Z, 0);  // A & M != 0
+    EXPECT_EQ(regs.flags.N, 0);  // M bit 7 clear
+    EXPECT_EQ(regs.flags.V, 0);  // M bit 6 clear
+}
+
+TEST(Opcode, BIT_ABS) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0x01;
+    mem[0x1234] = 0xc1;  // bits 7,6 set, bit 0 set
+
+    a.org(0x300)
+    (BIT, ABS, 0x1234);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.flags.Z, 0);  // A & M = 0x01
+    EXPECT_EQ(regs.flags.N, 1);  // M bit 7
+    EXPECT_EQ(regs.flags.V, 1);  // M bit 6
+}
+
+// NOP test
+TEST(Opcode, NOP) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0x42;
+    regs.X = 0x10;
+    regs.flags.C = 1;
+    regs.flags.Z = 0;
+
+    a.org(0x300)
+    (NOP, IMPLIED, 0);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.PC, 0x301);
+    EXPECT_EQ(regs.A, 0x42);  // Nothing changed
+    EXPECT_EQ(regs.X, 0x10);
+    EXPECT_EQ(regs.flags.C, 1);
+    EXPECT_EQ(regs.flags.Z, 0);
+}
+
+// CMP + BEQ integration: compare and branch pattern
+TEST(Opcode, CMP_BEQ_pattern) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0x42;
+
+    a.org(0x300)
+    (CMP, IMMEDIATE, 0x42)
+    (BEQ, REL, 0x10);
+
+    run_instr(regs, mem);  // CMP
+    EXPECT_EQ(regs.flags.Z, 1);
+
+    run_instr(regs, mem);  // BEQ - should be taken
+    EXPECT_EQ(regs.PC, 0x314);  // 0x304 + 0x10
+}
+
 // Transfer instruction tests
 TEST(Opcode, TAX_basic) {
     RegisterFile regs;

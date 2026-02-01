@@ -130,6 +130,15 @@ extern void run_instr(RegisterFile&, Memory&);
  MNEMONIC(TYA, 0) \
  MNEMONIC(TSX, 0) \
  MNEMONIC(TXS, 0) \
+ MNEMONIC(CMP, 0) \
+ MNEMONIC(CPX, 0) \
+ MNEMONIC(CPY, 0) \
+ MNEMONIC(PHA, 0) \
+ MNEMONIC(PHP, 0) \
+ MNEMONIC(PLA, 0) \
+ MNEMONIC(PLP, 0) \
+ MNEMONIC(BIT, 0) \
+ MNEMONIC(NOP, 0) \
 
 enum Mnemonic {
 #define MNEMONIC(mnem, _flags)\

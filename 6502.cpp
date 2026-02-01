@@ -303,6 +303,81 @@ op_STY(RegisterFile& regs, Memory& mem, AddressingMode mode) {
     return regs.PC + addressing_mode_to_length(mode);
 }
 
+// Helper for compare instructions: sets N, Z, C based on reg - M
+static inline void
+compare(RegisterFile& regs, uint8_t reg, uint8_t m) {
+    uint16_t result = reg - m;
+    regs.flags.C = (reg >= m);
+    regs.flags.Z = (reg == m);
+    regs.flags.N = (result >> 7) & 1;
+}
+
+uint16_t
+op_CMP(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    compare(regs, regs.A, operand(regs, mem, mode));
+    return regs.PC + addressing_mode_to_length(mode);
+}
+
+uint16_t
+op_CPX(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    compare(regs, regs.X, operand(regs, mem, mode));
+    return regs.PC + addressing_mode_to_length(mode);
+}
+
+uint16_t
+op_CPY(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    compare(regs, regs.Y, operand(regs, mem, mode));
+    return regs.PC + addressing_mode_to_length(mode);
+}
+
+uint16_t
+op_PHA(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    push8(regs, mem, regs.A);
+    return regs.PC + 1;
+}
+
+uint16_t
+op_PHP(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    // PHP always pushes with B flag set (like BRK)
+    push_status(regs, mem, true);
+    return regs.PC + 1;
+}
+
+uint16_t
+op_PLA(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    regs.A = pop8(regs, mem);
+    regs.flags.N = (regs.A >> 7) & 1;
+    regs.flags.Z = (regs.A == 0);
+    return regs.PC + 1;
+}
+
+uint16_t
+op_PLP(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    // Same restore logic as RTI
+    uint8_t status = pop8(regs, mem);
+    regs.flags.C = (status >> 0) & 1;
+    regs.flags.Z = (status >> 1) & 1;
+    regs.flags.I = (status >> 2) & 1;
+    regs.flags.D = (status >> 3) & 1;
+    regs.flags.V = (status >> 6) & 1;
+    regs.flags.N = (status >> 7) & 1;
+    return regs.PC + 1;
+}
+
+uint16_t
+op_BIT(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    uint8_t m = operand(regs, mem, mode);
+    regs.flags.Z = ((regs.A & m) == 0);
+    regs.flags.N = (m >> 7) & 1;
+    regs.flags.V = (m >> 6) & 1;
+    return regs.PC + addressing_mode_to_length(mode);
+}
+
+uint16_t
+op_NOP(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    return regs.PC + 1;
+}
+
 uint16_t
 op_TAX(RegisterFile& regs, Memory& mem, AddressingMode mode) {
     regs.X = regs.A;
@@ -790,6 +865,33 @@ const Opcode opcodeTable[] = {
  {TYA, 0x98, IMPLIED},
  {TSX, 0xba, IMPLIED},
  {TXS, 0x9a, IMPLIED},
+
+ {CMP, 0xc1, X_IND},
+ {CMP, 0xc5, ZPG},
+ {CMP, 0xc9, IMMEDIATE},
+ {CMP, 0xcd, ABS},
+ {CMP, 0xd1, IND_Y},
+ {CMP, 0xd5, ZPG_X},
+ {CMP, 0xd9, ABS_Y},
+ {CMP, 0xdd, ABS_X},
+
+ {CPX, 0xe0, IMMEDIATE},
+ {CPX, 0xe4, ZPG},
+ {CPX, 0xec, ABS},
+
+ {CPY, 0xc0, IMMEDIATE},
+ {CPY, 0xc4, ZPG},
+ {CPY, 0xcc, ABS},
+
+ {PHA, 0x48, IMPLIED},
+ {PHP, 0x08, IMPLIED},
+ {PLA, 0x68, IMPLIED},
+ {PLP, 0x28, IMPLIED},
+
+ {BIT, 0x24, ZPG},
+ {BIT, 0x2c, ABS},
+
+ {NOP, 0xea, IMPLIED},
 };
 
 const Opcode&
@@ -961,6 +1063,33 @@ execute_opcode(const Opcode& opcode, RegisterFile& regs, Memory& mem) {
             break;
         case TXS:
             regs.PC = op_TXS(regs, mem, opcode.mode);
+            break;
+        case CMP:
+            regs.PC = op_CMP(regs, mem, opcode.mode);
+            break;
+        case CPX:
+            regs.PC = op_CPX(regs, mem, opcode.mode);
+            break;
+        case CPY:
+            regs.PC = op_CPY(regs, mem, opcode.mode);
+            break;
+        case PHA:
+            regs.PC = op_PHA(regs, mem, opcode.mode);
+            break;
+        case PHP:
+            regs.PC = op_PHP(regs, mem, opcode.mode);
+            break;
+        case PLA:
+            regs.PC = op_PLA(regs, mem, opcode.mode);
+            break;
+        case PLP:
+            regs.PC = op_PLP(regs, mem, opcode.mode);
+            break;
+        case BIT:
+            regs.PC = op_BIT(regs, mem, opcode.mode);
+            break;
+        case NOP:
+            regs.PC = op_NOP(regs, mem, opcode.mode);
             break;
         default:
             NOT_REACHED();
