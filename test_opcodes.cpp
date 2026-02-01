@@ -456,6 +456,312 @@ TEST(Opcode, ORA_does_not_modify_carry) {
     EXPECT_EQ(regs.flags.C, 0);  // Carry should NOT be modified by ORA
 }
 
+// INC tests
+TEST(Opcode, INC_ZPG) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    mem[0x42] = 0x10;
+
+    a.org(0x300)
+    (INC, ZPG, 0x42);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(mem[0x42], 0x11);
+    EXPECT_EQ(regs.flags.N, 0);
+    EXPECT_EQ(regs.flags.Z, 0);
+}
+
+TEST(Opcode, INC_wrap) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    mem[0x42] = 0xff;
+
+    a.org(0x300)
+    (INC, ZPG, 0x42);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(mem[0x42], 0x00);
+    EXPECT_EQ(regs.flags.Z, 1);
+    EXPECT_EQ(regs.flags.N, 0);
+}
+
+TEST(Opcode, INC_negative) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    mem[0x42] = 0x7f;
+
+    a.org(0x300)
+    (INC, ZPG, 0x42);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(mem[0x42], 0x80);
+    EXPECT_EQ(regs.flags.N, 1);
+}
+
+TEST(Opcode, INC_ABS) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    mem[0x1234] = 0x05;
+
+    a.org(0x300)
+    (INC, ABS, 0x1234);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(mem[0x1234], 0x06);
+}
+
+// DEC tests
+TEST(Opcode, DEC_ZPG) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    mem[0x42] = 0x10;
+
+    a.org(0x300)
+    (DEC, ZPG, 0x42);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(mem[0x42], 0x0f);
+    EXPECT_EQ(regs.flags.N, 0);
+    EXPECT_EQ(regs.flags.Z, 0);
+}
+
+TEST(Opcode, DEC_wrap) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    mem[0x42] = 0x00;
+
+    a.org(0x300)
+    (DEC, ZPG, 0x42);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(mem[0x42], 0xff);
+    EXPECT_EQ(regs.flags.N, 1);
+}
+
+TEST(Opcode, DEC_to_zero) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    mem[0x42] = 0x01;
+
+    a.org(0x300)
+    (DEC, ZPG, 0x42);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(mem[0x42], 0x00);
+    EXPECT_EQ(regs.flags.Z, 1);
+}
+
+// INX tests
+TEST(Opcode, INX_basic) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.X = 0x10;
+
+    a.org(0x300)
+    (INX, IMPLIED, 0);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.X, 0x11);
+    EXPECT_EQ(regs.flags.N, 0);
+    EXPECT_EQ(regs.flags.Z, 0);
+    EXPECT_EQ(regs.PC, 0x301);
+}
+
+TEST(Opcode, INX_wrap) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.X = 0xff;
+
+    a.org(0x300)
+    (INX, IMPLIED, 0);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.X, 0x00);
+    EXPECT_EQ(regs.flags.Z, 1);
+}
+
+// INY tests
+TEST(Opcode, INY_basic) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.Y = 0x10;
+
+    a.org(0x300)
+    (INY, IMPLIED, 0);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.Y, 0x11);
+}
+
+TEST(Opcode, INY_wrap) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.Y = 0xff;
+
+    a.org(0x300)
+    (INY, IMPLIED, 0);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.Y, 0x00);
+    EXPECT_EQ(regs.flags.Z, 1);
+}
+
+// DEX tests
+TEST(Opcode, DEX_basic) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.X = 0x10;
+
+    a.org(0x300)
+    (DEX, IMPLIED, 0);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.X, 0x0f);
+}
+
+TEST(Opcode, DEX_to_zero) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.X = 0x01;
+
+    a.org(0x300)
+    (DEX, IMPLIED, 0);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.X, 0x00);
+    EXPECT_EQ(regs.flags.Z, 1);
+}
+
+TEST(Opcode, DEX_wrap) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.X = 0x00;
+
+    a.org(0x300)
+    (DEX, IMPLIED, 0);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.X, 0xff);
+    EXPECT_EQ(regs.flags.N, 1);
+}
+
+// DEY tests
+TEST(Opcode, DEY_basic) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.Y = 0x10;
+
+    a.org(0x300)
+    (DEY, IMPLIED, 0);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.Y, 0x0f);
+}
+
+TEST(Opcode, DEY_wrap) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.Y = 0x00;
+
+    a.org(0x300)
+    (DEY, IMPLIED, 0);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.Y, 0xff);
+    EXPECT_EQ(regs.flags.N, 1);
+}
+
+// Multi-instruction: count down loop with DEX + BNE
+TEST(Opcode, DEX_BNE_loop) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    // Simple loop: DEX; BNE -2 (loop back to DEX)
+    regs.PC = 0x300;
+    regs.X = 0x03;
+
+    a.org(0x300)
+    (DEX, IMPLIED, 0)         // $300
+    (BNE, REL, 0xfd);         // $301: branch back -3 -> $300
+
+    // Run 3 iterations: X goes 3->2->1->0
+    run_instr(regs, mem);  // DEX -> X=2
+    run_instr(regs, mem);  // BNE -> taken, back to $300
+    run_instr(regs, mem);  // DEX -> X=1
+    run_instr(regs, mem);  // BNE -> taken, back to $300
+    run_instr(regs, mem);  // DEX -> X=0
+    run_instr(regs, mem);  // BNE -> not taken, fall through
+
+    EXPECT_EQ(regs.X, 0x00);
+    EXPECT_EQ(regs.flags.Z, 1);
+    EXPECT_EQ(regs.PC, 0x303);  // Past the BNE
+}
+
 // BCC tests (Branch if Carry Clear)
 TEST(Opcode, BCC_taken_forward) {
     RegisterFile regs;

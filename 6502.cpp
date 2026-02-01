@@ -303,6 +303,56 @@ op_STY(RegisterFile& regs, Memory& mem, AddressingMode mode) {
     return regs.PC + addressing_mode_to_length(mode);
 }
 
+uint16_t
+op_INC(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    uint16_t addr = effective_address(regs, mem, mode);
+    uint8_t val = ++mem.bytes[addr];
+    regs.flags.N = (val >> 7) & 1;
+    regs.flags.Z = (val == 0);
+    return regs.PC + addressing_mode_to_length(mode);
+}
+
+uint16_t
+op_DEC(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    uint16_t addr = effective_address(regs, mem, mode);
+    uint8_t val = --mem.bytes[addr];
+    regs.flags.N = (val >> 7) & 1;
+    regs.flags.Z = (val == 0);
+    return regs.PC + addressing_mode_to_length(mode);
+}
+
+uint16_t
+op_INX(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    uint8_t val = ++regs.X;
+    regs.flags.N = (val >> 7) & 1;
+    regs.flags.Z = (val == 0);
+    return regs.PC + 1;
+}
+
+uint16_t
+op_INY(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    uint8_t val = ++regs.Y;
+    regs.flags.N = (val >> 7) & 1;
+    regs.flags.Z = (val == 0);
+    return regs.PC + 1;
+}
+
+uint16_t
+op_DEX(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    uint8_t val = --regs.X;
+    regs.flags.N = (val >> 7) & 1;
+    regs.flags.Z = (val == 0);
+    return regs.PC + 1;
+}
+
+uint16_t
+op_DEY(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    uint8_t val = --regs.Y;
+    regs.flags.N = (val >> 7) & 1;
+    regs.flags.Z = (val == 0);
+    return regs.PC + 1;
+}
+
 // Helper for branch instructions: calculates target address
 // Offset is signed and relative to PC+2 (address after the branch instruction)
 static inline uint16_t
@@ -621,6 +671,21 @@ const Opcode opcodeTable[] = {
  {BPL, 0x10, REL},
  {BVC, 0x50, REL},
  {BVS, 0x70, REL},
+
+ {INC, 0xe6, ZPG},
+ {INC, 0xf6, ZPG_X},
+ {INC, 0xee, ABS},
+ {INC, 0xfe, ABS_X},
+
+ {DEC, 0xc6, ZPG},
+ {DEC, 0xd6, ZPG_X},
+ {DEC, 0xce, ABS},
+ {DEC, 0xde, ABS_X},
+
+ {INX, 0xe8, IMPLIED},
+ {INY, 0xc8, IMPLIED},
+ {DEX, 0xca, IMPLIED},
+ {DEY, 0x88, IMPLIED},
 };
 
 const Opcode&
@@ -735,6 +800,24 @@ execute_opcode(const Opcode& opcode, RegisterFile& regs, Memory& mem) {
             break;
         case BVS:
             regs.PC = op_BVS(regs, mem, opcode.mode);
+            break;
+        case INC:
+            regs.PC = op_INC(regs, mem, opcode.mode);
+            break;
+        case DEC:
+            regs.PC = op_DEC(regs, mem, opcode.mode);
+            break;
+        case INX:
+            regs.PC = op_INX(regs, mem, opcode.mode);
+            break;
+        case INY:
+            regs.PC = op_INY(regs, mem, opcode.mode);
+            break;
+        case DEX:
+            regs.PC = op_DEX(regs, mem, opcode.mode);
+            break;
+        case DEY:
+            regs.PC = op_DEY(regs, mem, opcode.mode);
             break;
         default:
             NOT_REACHED();

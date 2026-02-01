@@ -111,6 +111,12 @@ extern void run_instr(RegisterFile&, Memory&);
  MNEMONIC(BPL, 0) \
  MNEMONIC(BVC, 0) \
  MNEMONIC(BVS, 0) \
+ MNEMONIC(INC, 0) \
+ MNEMONIC(DEC, 0) \
+ MNEMONIC(INX, 0) \
+ MNEMONIC(INY, 0) \
+ MNEMONIC(DEX, 0) \
+ MNEMONIC(DEY, 0) \
 
 enum Mnemonic {
 #define MNEMONIC(mnem, _flags)\
