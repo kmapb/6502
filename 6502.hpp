@@ -8,15 +8,30 @@
 #define NOT_REACHED() abort()
 
 
-struct Memory {
-    uint8_t bytes[1 << 16];
-   
-    uint8_t& operator[](uint16_t addr);
-    const uint8_t& operator[](uint16_t addr) const;
-    void reset();
+struct Device {
+    virtual uint8_t read(uint16_t addr) = 0;
+    virtual void write(uint16_t addr, uint8_t val) = 0;
+    virtual ~Device() = default;
+};
+
+struct Bus {
+    uint8_t ram[1 << 16] = {};
+    Device* page_device[256] = {};
+
+    uint8_t read(uint16_t addr) const;
+    void write(uint16_t addr, uint8_t val);
     uint16_t read16(uint16_t addr) const;
     void write16(uint16_t addr, uint16_t val);
+    void reset();
+
+    void map(uint8_t page, Device* dev);
+    void map(uint8_t page_start, uint8_t page_end, Device* dev);
+
+    uint8_t& operator[](uint16_t addr);
+    const uint8_t& operator[](uint16_t addr) const;
 };
+
+using Memory = Bus;
 
 struct Flags {
     unsigned int C : 1;

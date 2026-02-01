@@ -17,3 +17,8 @@ test_mem_exe = executable('test_mem', 'test_mem.cpp',
     dependencies: [gtest_dep, gtest_main_dep],
     link_with: lib_6502)
 test('test ze mem', test_mem_exe)
+
+test_bus_exe = executable('test_bus', 'test_bus.cpp',
+    dependencies: [gtest_dep, gtest_main_dep],
+    link_with: lib_6502)
+test('test ze bus', test_bus_exe)

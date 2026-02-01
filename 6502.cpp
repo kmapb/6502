@@ -2,34 +2,62 @@
 #include <cstring>
 
 
-uint8_t&
-Memory::operator[](uint16_t addr) {
-    return bytes[addr];
-}
-
-const uint8_t&
-Memory::operator[](uint16_t addr) const {
-    return bytes[addr];
+uint8_t
+Bus::read(uint16_t addr) const {
+    auto* dev = page_device[addr >> 8];
+    if (dev)
+        return const_cast<Device*>(dev)->read(addr);
+    return ram[addr];
 }
 
 void
-Memory::reset() {
-    memset(bytes, 0, sizeof(bytes));
+Bus::write(uint16_t addr, uint8_t val) {
+    auto* dev = page_device[addr >> 8];
+    if (dev) {
+        dev->write(addr, val);
+        return;
+    }
+    ram[addr] = val;
 }
 
 uint16_t
-Memory::read16(uint16_t addr) const {
-    auto ll = bytes[addr];
-    auto hh = bytes[(addr + 1) & 0xffff];
+Bus::read16(uint16_t addr) const {
+    auto ll = read(addr);
+    auto hh = read((addr + 1) & 0xffff);
     return (hh << 8) | ll;
 }
 
 void
-Memory::write16(uint16_t addr, uint16_t val) {
-    auto ll = val & 0xff;
-    auto hh = (val & 0xff00) >> 8;
-    bytes[addr] = ll;
-    bytes[(addr + 1) & 0xffff] = hh;
+Bus::write16(uint16_t addr, uint16_t val) {
+    write(addr, val & 0xff);
+    write((addr + 1) & 0xffff, (val >> 8) & 0xff);
+}
+
+void
+Bus::reset() {
+    memset(ram, 0, sizeof(ram));
+    memset(page_device, 0, sizeof(page_device));
+}
+
+void
+Bus::map(uint8_t page, Device* dev) {
+    page_device[page] = dev;
+}
+
+void
+Bus::map(uint8_t page_start, uint8_t page_end, Device* dev) {
+    for (unsigned p = page_start; p <= page_end; ++p)
+        page_device[p] = dev;
+}
+
+uint8_t&
+Bus::operator[](uint16_t addr) {
+    return ram[addr];
+}
+
+const uint8_t&
+Bus::operator[](uint16_t addr) const {
+    return ram[addr];
 }
 
 uint8_t
@@ -48,58 +76,58 @@ operand(RegisterFile& regs, Memory& mem, AddressingMode mode) {
     switch(mode) {
     case ACCUMULATOR: return regs.A;
     case ABS: {
-        auto ll = mem.bytes[regs.PC + 1];
-        auto hh = mem.bytes[regs.PC + 2];
-        return mem.bytes[ll + (hh << 8)];
+        auto ll = mem.read(regs.PC + 1);
+        auto hh = mem.read(regs.PC + 2);
+        return mem.read(ll + (hh << 8));
     }
     case ABS_X: {
-        auto ll = mem.bytes[regs.PC + 1];
-        auto hh = mem.bytes[regs.PC + 2];
-        return mem.bytes[regs.X + ll + (hh << 8)];
+        auto ll = mem.read(regs.PC + 1);
+        auto hh = mem.read(regs.PC + 2);
+        return mem.read(regs.X + ll + (hh << 8));
     }
     case ABS_Y: {
-        auto ll = mem.bytes[regs.PC + 1];
-        auto hh = mem.bytes[regs.PC + 2];
-        return mem.bytes[regs.Y + ll + (hh << 8)];
+        auto ll = mem.read(regs.PC + 1);
+        auto hh = mem.read(regs.PC + 2);
+        return mem.read(regs.Y + ll + (hh << 8));
     }
     case IMMEDIATE: {
-        return mem.bytes[regs.PC + 1];
+        return mem.read(regs.PC + 1);
     }
     case IMPLIED: {
         return 0; // Operand not used for this opcode
     }
     case INDIRECT: {
-        auto ll = mem.bytes[regs.PC + 1];
-        auto hh = mem.bytes[regs.PC + 2];
-        return mem.bytes[ll + (hh << 8)];
+        auto ll = mem.read(regs.PC + 1);
+        auto hh = mem.read(regs.PC + 2);
+        return mem.read(ll + (hh << 8));
     }
     case X_IND: {
-        auto addr_low = mem.bytes[regs.PC + 1];
-        auto ll = mem.bytes[(addr_low + regs.X) & 0xff];
-        auto hh = mem.bytes[(addr_low + regs.X + 1) & 0xff];
-        return mem.bytes[ll + (hh << 8)];
+        auto addr_low = mem.read(regs.PC + 1);
+        auto ll = mem.read((addr_low + regs.X) & 0xff);
+        auto hh = mem.read((addr_low + regs.X + 1) & 0xff);
+        return mem.read(ll + (hh << 8));
     }
     case IND_Y: {
-        auto zp_addr = mem.bytes[regs.PC + 1];
-        auto ll = mem.bytes[zp_addr];
-        auto hh = mem.bytes[(zp_addr + 1) & 0xff];
-        return mem.bytes[(ll + (hh << 8) + regs.Y) & 0xffff];
+        auto zp_addr = mem.read(regs.PC + 1);
+        auto ll = mem.read(zp_addr);
+        auto hh = mem.read((zp_addr + 1) & 0xff);
+        return mem.read((ll + (hh << 8) + regs.Y) & 0xffff);
     }
     case REL: {
-        int8_t disp = int8_t(mem.bytes[regs.PC + 1]);
+        int8_t disp = int8_t(mem.read(regs.PC + 1));
         return regs.PC + disp;
     }
     case ZPG: {
-        uint8_t addr = mem.bytes[regs.PC + 1];
-        return mem.bytes[addr];
+        uint8_t addr = mem.read(regs.PC + 1);
+        return mem.read(addr);
     }
     case ZPG_X: {
-        uint8_t addr = mem.bytes[regs.PC + 1] + regs.X;
-        return mem.bytes[addr];
+        uint8_t addr = mem.read(regs.PC + 1) + regs.X;
+        return mem.read(addr);
     }
     case ZPG_Y: {
-        uint8_t addr = mem.bytes[regs.PC + 1] + regs.Y;
-        return mem.bytes[addr];
+        uint8_t addr = mem.read(regs.PC + 1) + regs.Y;
+        return mem.read(addr);
     }
     default: return 0;
     }
@@ -111,58 +139,58 @@ static inline uint16_t
 effective_address(RegisterFile& regs, Memory& mem, AddressingMode mode) {
     switch(mode) {
     case ABS: {
-        auto ll = mem.bytes[regs.PC + 1];
-        auto hh = mem.bytes[regs.PC + 2];
+        auto ll = mem.read(regs.PC + 1);
+        auto hh = mem.read(regs.PC + 2);
         return ll + (hh << 8);
     }
     case ABS_X: {
-        auto ll = mem.bytes[regs.PC + 1];
-        auto hh = mem.bytes[regs.PC + 2];
+        auto ll = mem.read(regs.PC + 1);
+        auto hh = mem.read(regs.PC + 2);
         return (regs.X + ll + (hh << 8)) & 0xffff;
     }
     case ABS_Y: {
-        auto ll = mem.bytes[regs.PC + 1];
-        auto hh = mem.bytes[regs.PC + 2];
+        auto ll = mem.read(regs.PC + 1);
+        auto hh = mem.read(regs.PC + 2);
         return (regs.Y + ll + (hh << 8)) & 0xffff;
     }
     case X_IND: {
-        auto addr_low = mem.bytes[regs.PC + 1];
-        auto ll = mem.bytes[(addr_low + regs.X) & 0xff];
-        auto hh = mem.bytes[(addr_low + regs.X + 1) & 0xff];
+        auto addr_low = mem.read(regs.PC + 1);
+        auto ll = mem.read((addr_low + regs.X) & 0xff);
+        auto hh = mem.read((addr_low + regs.X + 1) & 0xff);
         return ll + (hh << 8);
     }
     case IND_Y: {
-        auto zp_addr = mem.bytes[regs.PC + 1];
-        auto ll = mem.bytes[zp_addr];
-        auto hh = mem.bytes[(zp_addr + 1) & 0xff];
+        auto zp_addr = mem.read(regs.PC + 1);
+        auto ll = mem.read(zp_addr);
+        auto hh = mem.read((zp_addr + 1) & 0xff);
         return (ll + (hh << 8) + regs.Y) & 0xffff;
     }
     case ZPG: {
-        return mem.bytes[regs.PC + 1];
+        return mem.read(regs.PC + 1);
     }
     case ZPG_X: {
-        return (mem.bytes[regs.PC + 1] + regs.X) & 0xff;
+        return (mem.read(regs.PC + 1) + regs.X) & 0xff;
     }
     case ZPG_Y: {
-        return (mem.bytes[regs.PC + 1] + regs.Y) & 0xff;
+        return (mem.read(regs.PC + 1) + regs.Y) & 0xff;
     }
     default: return 0;
     }
 }
 
-uint8_t pop8(RegisterFile& regs, const Memory& mem) {
+uint8_t pop8(RegisterFile& regs, Memory& mem) {
     ++regs.SP;
-    return mem[0x100 | regs.SP];
+    return mem.read(0x100 | regs.SP);
 }
 
-uint16_t pop16(RegisterFile& regs, const Memory& mem) {
+uint16_t pop16(RegisterFile& regs, Memory& mem) {
     uint8_t ll = pop8(regs, mem);
     uint8_t hh = pop8(regs, mem);
     return ll | (hh << 8);
 }
 
 void push8(RegisterFile& regs, Memory& mem, uint8_t val) {
-    mem[0x100 | regs.SP] = val;
+    mem.write(0x100 | regs.SP, val);
     --regs.SP;
 }
 
@@ -185,7 +213,7 @@ set_flags(RegisterFile& regs, uint8_t oldA, uint8_t newA, uint8_t mask) {
 // Opcode implementations
 uint16_t
 op_BRK(RegisterFile& regs, Memory& mem, AddressingMode mode) {
-    push16(regs, mem, regs.PC + 2); // Excess byte after BRK 
+    push16(regs, mem, regs.PC + 2); // Excess byte after BRK
     push_status(regs, mem, true);
     return mem.read16(0xfffe);
 };
@@ -285,21 +313,21 @@ op_LDY(RegisterFile& regs, Memory& mem, AddressingMode mode) {
 uint16_t
 op_STA(RegisterFile& regs, Memory& mem, AddressingMode mode) {
     uint16_t addr = effective_address(regs, mem, mode);
-    mem.bytes[addr] = regs.A;
+    mem.write(addr, regs.A);
     return regs.PC + addressing_mode_to_length(mode);
 }
 
 uint16_t
 op_STX(RegisterFile& regs, Memory& mem, AddressingMode mode) {
     uint16_t addr = effective_address(regs, mem, mode);
-    mem.bytes[addr] = regs.X;
+    mem.write(addr, regs.X);
     return regs.PC + addressing_mode_to_length(mode);
 }
 
 uint16_t
 op_STY(RegisterFile& regs, Memory& mem, AddressingMode mode) {
     uint16_t addr = effective_address(regs, mem, mode);
-    mem.bytes[addr] = regs.Y;
+    mem.write(addr, regs.Y);
     return regs.PC + addressing_mode_to_length(mode);
 }
 
@@ -470,7 +498,8 @@ op_SEI(RegisterFile& regs, Memory& mem, AddressingMode mode) {
 uint16_t
 op_INC(RegisterFile& regs, Memory& mem, AddressingMode mode) {
     uint16_t addr = effective_address(regs, mem, mode);
-    uint8_t val = ++mem.bytes[addr];
+    uint8_t val = mem.read(addr) + 1;
+    mem.write(addr, val);
     regs.flags.N = (val >> 7) & 1;
     regs.flags.Z = (val == 0);
     return regs.PC + addressing_mode_to_length(mode);
@@ -479,7 +508,8 @@ op_INC(RegisterFile& regs, Memory& mem, AddressingMode mode) {
 uint16_t
 op_DEC(RegisterFile& regs, Memory& mem, AddressingMode mode) {
     uint16_t addr = effective_address(regs, mem, mode);
-    uint8_t val = --mem.bytes[addr];
+    uint8_t val = mem.read(addr) - 1;
+    mem.write(addr, val);
     regs.flags.N = (val >> 7) & 1;
     regs.flags.Z = (val == 0);
     return regs.PC + addressing_mode_to_length(mode);
@@ -521,7 +551,7 @@ op_DEY(RegisterFile& regs, Memory& mem, AddressingMode mode) {
 // Offset is signed and relative to PC+2 (address after the branch instruction)
 static inline uint16_t
 branch_target(RegisterFile& regs, Memory& mem) {
-    int8_t offset = int8_t(mem.bytes[regs.PC + 1]);
+    int8_t offset = int8_t(mem.read(regs.PC + 1));
     return (regs.PC + 2 + offset) & 0xffff;
 }
 
@@ -592,16 +622,16 @@ op_BVS(RegisterFile& regs, Memory& mem, AddressingMode mode) {
 uint16_t
 op_JMP(RegisterFile& regs, Memory& mem, AddressingMode mode) {
     if (mode == ABS) {
-        auto ll = mem.bytes[regs.PC + 1];
-        auto hh = mem.bytes[regs.PC + 2];
+        auto ll = mem.read(regs.PC + 1);
+        auto hh = mem.read(regs.PC + 2);
         return ll | (hh << 8);
     } else if (mode == INDIRECT) {
-        auto ptr_ll = mem.bytes[regs.PC + 1];
-        auto ptr_hh = mem.bytes[regs.PC + 2];
+        auto ptr_ll = mem.read(regs.PC + 1);
+        auto ptr_hh = mem.read(regs.PC + 2);
         uint16_t ptr = ptr_ll | (ptr_hh << 8);
         // NMOS 6502 bug: doesn't increment high byte at page boundary
-        auto ll = mem.bytes[ptr];
-        auto hh = mem.bytes[(ptr & 0xff00) | ((ptr + 1) & 0x00ff)];
+        auto ll = mem.read(ptr);
+        auto hh = mem.read((ptr & 0xff00) | ((ptr + 1) & 0x00ff));
         return ll | (hh << 8);
     }
     NOT_REACHED();
@@ -613,8 +643,8 @@ op_JSR(RegisterFile& regs, Memory& mem, AddressingMode mode) {
     // Push address of last byte of JSR instruction (PC+2)
     // RTS will pull this and add 1
     push16(regs, mem, regs.PC + 2);
-    auto ll = mem.bytes[regs.PC + 1];
-    auto hh = mem.bytes[regs.PC + 2];
+    auto ll = mem.read(regs.PC + 1);
+    auto hh = mem.read(regs.PC + 2);
     return ll | (hh << 8);
 }
 
@@ -633,9 +663,9 @@ op_ASL(RegisterFile& regs, Memory& mem, AddressingMode mode) {
         regs.A = new_val;
     } else {
         uint16_t addr = effective_address(regs, mem, mode);
-        old_val = mem.bytes[addr];
+        old_val = mem.read(addr);
         new_val = uint8_t(old_val << 1);
-        mem.bytes[addr] = new_val;
+        mem.write(addr, new_val);
     }
     regs.flags.C = (old_val >> 7) & 1;
     regs.flags.N = (new_val >> 7) & 1;
@@ -652,9 +682,9 @@ op_LSR(RegisterFile& regs, Memory& mem, AddressingMode mode) {
         regs.A = new_val;
     } else {
         uint16_t addr = effective_address(regs, mem, mode);
-        old_val = mem.bytes[addr];
+        old_val = mem.read(addr);
         new_val = old_val >> 1;
-        mem.bytes[addr] = new_val;
+        mem.write(addr, new_val);
     }
     regs.flags.C = old_val & 1;
     regs.flags.N = 0;  // Always 0 after right shift
@@ -672,9 +702,9 @@ op_ROL(RegisterFile& regs, Memory& mem, AddressingMode mode) {
         regs.A = new_val;
     } else {
         uint16_t addr = effective_address(regs, mem, mode);
-        old_val = mem.bytes[addr];
+        old_val = mem.read(addr);
         new_val = uint8_t((old_val << 1) | old_carry);
-        mem.bytes[addr] = new_val;
+        mem.write(addr, new_val);
     }
     regs.flags.C = (old_val >> 7) & 1;
     regs.flags.N = (new_val >> 7) & 1;
@@ -692,9 +722,9 @@ op_ROR(RegisterFile& regs, Memory& mem, AddressingMode mode) {
         regs.A = new_val;
     } else {
         uint16_t addr = effective_address(regs, mem, mode);
-        old_val = mem.bytes[addr];
+        old_val = mem.read(addr);
         new_val = (old_val >> 1) | (old_carry << 7);
-        mem.bytes[addr] = new_val;
+        mem.write(addr, new_val);
     }
     regs.flags.C = old_val & 1;
     regs.flags.N = (new_val >> 7) & 1;
@@ -1101,4 +1131,3 @@ void
 run_instr(RegisterFile& regs, Memory& mem) {
     execute_opcode(byte_to_opcode(mem[regs.PC]), regs, mem);
 }
-
