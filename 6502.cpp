@@ -214,6 +214,41 @@ op_RTI(RegisterFile& regs, Memory& mem, AddressingMode mode) {
 }
 
 uint16_t
+op_JMP(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    if (mode == ABS) {
+        auto ll = mem.bytes[regs.PC + 1];
+        auto hh = mem.bytes[regs.PC + 2];
+        return ll | (hh << 8);
+    } else if (mode == INDIRECT) {
+        auto ptr_ll = mem.bytes[regs.PC + 1];
+        auto ptr_hh = mem.bytes[regs.PC + 2];
+        uint16_t ptr = ptr_ll | (ptr_hh << 8);
+        // NMOS 6502 bug: doesn't increment high byte at page boundary
+        auto ll = mem.bytes[ptr];
+        auto hh = mem.bytes[(ptr & 0xff00) | ((ptr + 1) & 0x00ff)];
+        return ll | (hh << 8);
+    }
+    NOT_REACHED();
+    return 0;
+}
+
+uint16_t
+op_JSR(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    // Push address of last byte of JSR instruction (PC+2)
+    // RTS will pull this and add 1
+    push16(regs, mem, regs.PC + 2);
+    auto ll = mem.bytes[regs.PC + 1];
+    auto hh = mem.bytes[regs.PC + 2];
+    return ll | (hh << 8);
+}
+
+uint16_t
+op_RTS(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    // Pull return address and add 1
+    return pop16(regs, mem) + 1;
+}
+
+uint16_t
 op_ASL(RegisterFile& regs, Memory& mem, AddressingMode mode) {
     uint8_t old_val, new_val;
     if (mode == ACCUMULATOR) {
@@ -258,6 +293,13 @@ const Opcode opcodeTable[] = {
  {ASL, 0x1e, ABS_X},
 
  {RTI, 0x40, IMPLIED},
+
+ {JMP, 0x4c, ABS},
+ {JMP, 0x6c, INDIRECT},
+
+ {JSR, 0x20, ABS},
+
+ {RTS, 0x60, IMPLIED},
 };
 
 const Opcode&
@@ -300,6 +342,15 @@ execute_opcode(const Opcode& opcode, RegisterFile& regs, Memory& mem) {
             break;
         case RTI:
             regs.PC = op_RTI(regs, mem, opcode.mode);
+            break;
+        case JMP:
+            regs.PC = op_JMP(regs, mem, opcode.mode);
+            break;
+        case JSR:
+            regs.PC = op_JSR(regs, mem, opcode.mode);
+            break;
+        case RTS:
+            regs.PC = op_RTS(regs, mem, opcode.mode);
             break;
         default:
             NOT_REACHED();

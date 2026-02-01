@@ -4,6 +4,138 @@
 #include "assembler.hpp"
 
 namespace {
+TEST(Opcode, JMP_ABS) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    a.org(0x300)
+    (JMP, ABS, 0x1234);
+
+    EXPECT_EQ(mem[0x300], 0x4c);  // JMP absolute opcode
+    EXPECT_EQ(mem[0x301], 0x34);  // Low byte
+    EXPECT_EQ(mem[0x302], 0x12);  // High byte
+
+    regs.PC = 0x300;
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.PC, 0x1234);
+}
+
+TEST(Opcode, JMP_INDIRECT) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    // Set up indirect pointer at $2000 pointing to $1234
+    mem[0x2000] = 0x34;  // Low byte of target
+    mem[0x2001] = 0x12;  // High byte of target
+
+    a.org(0x300)
+    (JMP, INDIRECT, 0x2000);
+
+    EXPECT_EQ(mem[0x300], 0x6c);  // JMP indirect opcode
+
+    regs.PC = 0x300;
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.PC, 0x1234);
+}
+
+// Test the infamous NMOS 6502 JMP indirect bug at page boundary
+TEST(Opcode, JMP_INDIRECT_page_bug) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    // Set up indirect pointer at $20FF (page boundary)
+    // Low byte at $20FF, high byte should come from $2000 (not $2100) due to bug
+    mem[0x20ff] = 0x34;  // Low byte of target
+    mem[0x2100] = 0x56;  // This would be high byte if bug didn't exist
+    mem[0x2000] = 0x12;  // This is where high byte actually comes from (bug)
+
+    a.org(0x300)
+    (JMP, INDIRECT, 0x20ff);
+
+    regs.PC = 0x300;
+    run_instr(regs, mem);
+
+    // Due to bug: low from $20FF (0x34), high from $2000 (0x12)
+    EXPECT_EQ(regs.PC, 0x1234);  // NOT 0x5634
+}
+
+TEST(Opcode, JSR) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    a.org(0x300)
+    (JSR, ABS, 0x1234);
+
+    EXPECT_EQ(mem[0x300], 0x20);  // JSR opcode
+
+    regs.PC = 0x300;
+    regs.SP = 0xff;
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.PC, 0x1234);
+    EXPECT_EQ(regs.SP, 0xfd);    // Pushed 2 bytes
+
+    // Verify stack contains return address (PC+2 = 0x302)
+    EXPECT_EQ(mem[0x1ff], 0x03);  // High byte of 0x302
+    EXPECT_EQ(mem[0x1fe], 0x02);  // Low byte of 0x302
+}
+
+TEST(Opcode, RTS) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    // Set up stack with return address 0x1233
+    // RTS will add 1 to get 0x1234
+    mem[0x1ff] = 0x12;  // High byte
+    mem[0x1fe] = 0x33;  // Low byte
+    regs.SP = 0xfd;     // Points below pushed data
+
+    a.org(0x400)
+    (RTS, IMPLIED, 0);
+
+    EXPECT_EQ(mem[0x400], 0x60);  // RTS opcode
+
+    regs.PC = 0x400;
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.PC, 0x1234);  // 0x1233 + 1
+    EXPECT_EQ(regs.SP, 0xff);    // Pulled 2 bytes
+}
+
+TEST(Opcode, JSR_RTS_roundtrip) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    // JSR at 0x300, subroutine at 0x400, RTS returns to 0x303
+    a.org(0x300)
+    (JSR, ABS, 0x400);
+    // Next instruction would be at 0x303
+
+    a.org(0x400)
+    (RTS, IMPLIED, 0);
+
+    regs.PC = 0x300;
+    regs.SP = 0xff;
+
+    // Execute JSR
+    run_instr(regs, mem);
+    EXPECT_EQ(regs.PC, 0x400);
+    EXPECT_EQ(regs.SP, 0xfd);
+
+    // Execute RTS
+    run_instr(regs, mem);
+    EXPECT_EQ(regs.PC, 0x303);  // Returns to instruction after JSR
+    EXPECT_EQ(regs.SP, 0xff);
+}
+
 TEST(Opcode, RTI) {
     RegisterFile regs;
     Memory mem;
