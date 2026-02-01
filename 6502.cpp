@@ -151,7 +151,8 @@ effective_address(RegisterFile& regs, Memory& mem, AddressingMode mode) {
 }
 
 uint8_t pop8(RegisterFile& regs, const Memory& mem) {
-    return mem[++regs.SP];
+    ++regs.SP;
+    return mem[0x100 | regs.SP];
 }
 
 uint16_t pop16(RegisterFile& regs, const Memory& mem) {
@@ -161,12 +162,13 @@ uint16_t pop16(RegisterFile& regs, const Memory& mem) {
 }
 
 void push8(RegisterFile& regs, Memory& mem, uint8_t val) {
-    mem[regs.SP--] = val;
+    mem[0x100 | regs.SP] = val;
+    --regs.SP;
 }
 
 void push16(RegisterFile& regs, Memory& mem, uint16_t val) {
-    push8(regs, mem, val & 0xff);
-    push8(regs, mem, (val & 0xff00) >> 8);
+    push8(regs, mem, (val >> 8) & 0xff);  // High byte first
+    push8(regs, mem, val & 0xff);          // Low byte second
 }
 
 void push_status(RegisterFile& regs, Memory& mem, bool breakp=false) {
@@ -193,6 +195,23 @@ op_ORA(RegisterFile& regs, Memory& mem, AddressingMode mode) {
     regs.A |= operand(regs, mem, mode);
     return regs.PC + addressing_mode_to_length(mode);
 };
+
+uint16_t
+op_RTI(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    // Pull status register (B flag and bit 5 are ignored)
+    uint8_t status = pop8(regs, mem);
+    regs.flags.C = (status >> 0) & 1;
+    regs.flags.Z = (status >> 1) & 1;
+    regs.flags.I = (status >> 2) & 1;
+    regs.flags.D = (status >> 3) & 1;
+    // Bit 4 (B) is not a real flag, ignored
+    // Bit 5 is always 1, ignored
+    regs.flags.V = (status >> 6) & 1;
+    regs.flags.N = (status >> 7) & 1;
+
+    // Pull PC (low byte first, then high byte)
+    return pop16(regs, mem);
+}
 
 uint16_t
 op_ASL(RegisterFile& regs, Memory& mem, AddressingMode mode) {
@@ -237,6 +256,8 @@ const Opcode opcodeTable[] = {
  {ASL, 0x16, ZPG_X},
  {ASL, 0x0e, ABS},
  {ASL, 0x1e, ABS_X},
+
+ {RTI, 0x40, IMPLIED},
 };
 
 const Opcode&
@@ -276,6 +297,9 @@ execute_opcode(const Opcode& opcode, RegisterFile& regs, Memory& mem) {
             break;
         case ASL:
             regs.PC = op_ASL(regs, mem, opcode.mode);
+            break;
+        case RTI:
+            regs.PC = op_RTI(regs, mem, opcode.mode);
             break;
         default:
             NOT_REACHED();

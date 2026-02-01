@@ -4,6 +4,82 @@
 #include "assembler.hpp"
 
 namespace {
+TEST(Opcode, RTI) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    // Set up stack as if BRK had pushed PC=0x1234 and status
+    // Stack layout (growing down from 0x1ff):
+    //   0x1ff: PC high (0x12)
+    //   0x1fe: PC low (0x34)
+    //   0x1fd: Status
+    // Status byte format: NV1BDIZC
+    // We want: N=1, V=1, D=0, I=0, Z=1, C=1 = 0b11100011 = 0xe3
+    mem[0x1ff] = 0x12;
+    mem[0x1fe] = 0x34;
+    mem[0x1fd] = 0xe3;  // N=1,V=1,(1=1),(B=0),D=0,I=0,Z=1,C=1
+    regs.SP = 0xfc;     // Points below the pushed data
+
+    // Set all flags to opposite values to verify they get restored
+    regs.flags.N = 0;
+    regs.flags.V = 0;
+    regs.flags.D = 1;  // Set to verify it gets cleared
+    regs.flags.I = 1;  // Set to verify it gets cleared
+    regs.flags.Z = 0;
+    regs.flags.C = 0;
+
+    a.org(0x300)
+    (RTI, IMPLIED, 0);
+
+    regs.PC = 0x300;
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.PC, 0x1234);
+    EXPECT_EQ(regs.SP, 0xff);    // SP restored (incremented 3 times)
+    EXPECT_EQ(regs.flags.N, 1);
+    EXPECT_EQ(regs.flags.V, 1);
+    EXPECT_EQ(regs.flags.D, 0);
+    EXPECT_EQ(regs.flags.I, 0);
+    EXPECT_EQ(regs.flags.Z, 1);
+    EXPECT_EQ(regs.flags.C, 1);
+}
+
+// Test BRK followed by RTI returns to correct location
+TEST(Opcode, BRK_RTI_roundtrip) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    // Set up BRK at 0x300
+    a.org(0x300)
+    (BRK, IMPLIED, 0);
+
+    // Set up RTI at interrupt handler location 0x400
+    a.org(0x400)
+    (RTI, IMPLIED, 0);
+
+    // Set interrupt vector to point to our handler
+    mem.write16(0xfffe, 0x400);
+
+    regs.PC = 0x300;
+    regs.SP = 0xff;
+    regs.flags.C = 1;
+    regs.flags.N = 1;
+
+    // Execute BRK
+    run_instr(regs, mem);
+    EXPECT_EQ(regs.PC, 0x400);
+    EXPECT_EQ(regs.SP, 0xfc);
+
+    // Execute RTI
+    run_instr(regs, mem);
+    EXPECT_EQ(regs.PC, 0x302);  // BRK pushes PC+2
+    EXPECT_EQ(regs.SP, 0xff);
+    EXPECT_EQ(regs.flags.C, 1);
+    EXPECT_EQ(regs.flags.N, 1);
+}
+
 TEST(Opcode, BRK) {
     RegisterFile regs;
     Memory mem;
@@ -16,10 +92,24 @@ TEST(Opcode, BRK) {
     mem.write16(0xfffe, 0xcafe);
     regs.PC = 0x300;
     regs.SP = 0xf8;
+    regs.flags.C = 1;
+    regs.flags.Z = 0;
+    regs.flags.N = 1;
 
     run_instr(regs, mem);
     ASSERT_EQ(regs.SP, 0xf5);
     ASSERT_EQ(regs.PC, 0xcafe);
+
+    // Verify stack layout: PC pushed as high byte first, then low byte, then status
+    // PC+2 = 0x302, so high=0x03, low=0x02
+    // Stack grows down, so after pushing:
+    //   mem[0x1f8] = PC high (0x03)
+    //   mem[0x1f7] = PC low (0x02)
+    //   mem[0x1f6] = Status with B flag set
+    EXPECT_EQ(mem[0x1f8], 0x03);  // PC high byte
+    EXPECT_EQ(mem[0x1f7], 0x02);  // PC low byte
+    // Status: N=1, V=0, (1), B=1, D=0, I=0, Z=0, C=1 = 0b10110001 = 0xb1
+    EXPECT_EQ(mem[0x1f6], 0xb1);  // Status with B=1
 }
 
 TEST(Opcode, ORA) {

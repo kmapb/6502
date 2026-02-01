@@ -86,6 +86,7 @@ extern void run_instr(RegisterFile&, Memory&);
  MNEMONIC(BRK, 0) \
  MNEMONIC(ORA, (flags::Z | flags::N)) \
  MNEMONIC(ASL, 0) \
+ MNEMONIC(RTI, 0) \
 
 enum Mnemonic {
 #define MNEMONIC(mnem, _flags)\
