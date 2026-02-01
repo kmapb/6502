@@ -43,6 +43,27 @@ TEST(Opcode, ORA) {
     }
 }
 
+// Test that ORA does not modify the carry flag (exposes bug at 6502.cpp:133)
+TEST(Opcode, ORA_does_not_modify_carry) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.flags.C = 0;  // Carry is clear
+    regs.A = 0x80;     // A has bit 7 set
+
+    a.org(0x300)
+    (ORA, IMMEDIATE, 0x00);  // ORA #0 - should not change A or C
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0x80);     // A unchanged
+    EXPECT_EQ(regs.flags.N, 1);  // Negative flag set (bit 7)
+    EXPECT_EQ(regs.flags.Z, 0);  // Not zero
+    EXPECT_EQ(regs.flags.C, 0);  // Carry should NOT be modified by ORA
+}
+
 TEST(Opcode, ASL) {
     RegisterFile regs;
     Memory mem;

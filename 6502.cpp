@@ -130,7 +130,7 @@ void
 set_flags(RegisterFile& regs, uint8_t oldA, uint8_t newA, uint8_t mask) {
     if (mask & flags::N) regs.flags.N = (newA >> 7);
     if (mask & flags::Z) regs.flags.Z = (newA == 0);
-    if (mask && flags::C) regs.flags.C = (oldA >> 7);
+    if (mask & flags::C) regs.flags.C = (oldA >> 7);
 }
 
 // Opcode implementations
