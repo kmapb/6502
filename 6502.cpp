@@ -304,6 +304,53 @@ op_STY(RegisterFile& regs, Memory& mem, AddressingMode mode) {
 }
 
 uint16_t
+op_TAX(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    regs.X = regs.A;
+    regs.flags.N = (regs.X >> 7) & 1;
+    regs.flags.Z = (regs.X == 0);
+    return regs.PC + 1;
+}
+
+uint16_t
+op_TAY(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    regs.Y = regs.A;
+    regs.flags.N = (regs.Y >> 7) & 1;
+    regs.flags.Z = (regs.Y == 0);
+    return regs.PC + 1;
+}
+
+uint16_t
+op_TXA(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    regs.A = regs.X;
+    regs.flags.N = (regs.A >> 7) & 1;
+    regs.flags.Z = (regs.A == 0);
+    return regs.PC + 1;
+}
+
+uint16_t
+op_TYA(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    regs.A = regs.Y;
+    regs.flags.N = (regs.A >> 7) & 1;
+    regs.flags.Z = (regs.A == 0);
+    return regs.PC + 1;
+}
+
+uint16_t
+op_TSX(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    regs.X = regs.SP;
+    regs.flags.N = (regs.X >> 7) & 1;
+    regs.flags.Z = (regs.X == 0);
+    return regs.PC + 1;
+}
+
+uint16_t
+op_TXS(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    regs.SP = regs.X;
+    // TXS does NOT affect flags
+    return regs.PC + 1;
+}
+
+uint16_t
 op_CLC(RegisterFile& regs, Memory& mem, AddressingMode mode) {
     regs.flags.C = 0;
     return regs.PC + 1;
@@ -736,6 +783,13 @@ const Opcode opcodeTable[] = {
  {SEC, 0x38, IMPLIED},
  {SED, 0xf8, IMPLIED},
  {SEI, 0x78, IMPLIED},
+
+ {TAX, 0xaa, IMPLIED},
+ {TAY, 0xa8, IMPLIED},
+ {TXA, 0x8a, IMPLIED},
+ {TYA, 0x98, IMPLIED},
+ {TSX, 0xba, IMPLIED},
+ {TXS, 0x9a, IMPLIED},
 };
 
 const Opcode&
@@ -889,6 +943,24 @@ execute_opcode(const Opcode& opcode, RegisterFile& regs, Memory& mem) {
             break;
         case SEI:
             regs.PC = op_SEI(regs, mem, opcode.mode);
+            break;
+        case TAX:
+            regs.PC = op_TAX(regs, mem, opcode.mode);
+            break;
+        case TAY:
+            regs.PC = op_TAY(regs, mem, opcode.mode);
+            break;
+        case TXA:
+            regs.PC = op_TXA(regs, mem, opcode.mode);
+            break;
+        case TYA:
+            regs.PC = op_TYA(regs, mem, opcode.mode);
+            break;
+        case TSX:
+            regs.PC = op_TSX(regs, mem, opcode.mode);
+            break;
+        case TXS:
+            regs.PC = op_TXS(regs, mem, opcode.mode);
             break;
         default:
             NOT_REACHED();

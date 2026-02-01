@@ -124,6 +124,12 @@ extern void run_instr(RegisterFile&, Memory&);
  MNEMONIC(SEC, 0) \
  MNEMONIC(SED, 0) \
  MNEMONIC(SEI, 0) \
+ MNEMONIC(TAX, 0) \
+ MNEMONIC(TAY, 0) \
+ MNEMONIC(TXA, 0) \
+ MNEMONIC(TYA, 0) \
+ MNEMONIC(TSX, 0) \
+ MNEMONIC(TXS, 0) \
 
 enum Mnemonic {
 #define MNEMONIC(mnem, _flags)\

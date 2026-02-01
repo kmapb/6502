@@ -456,6 +456,154 @@ TEST(Opcode, ORA_does_not_modify_carry) {
     EXPECT_EQ(regs.flags.C, 0);  // Carry should NOT be modified by ORA
 }
 
+// Transfer instruction tests
+TEST(Opcode, TAX_basic) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0x42;
+    regs.X = 0x00;
+
+    a.org(0x300)
+    (TAX, IMPLIED, 0);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.X, 0x42);
+    EXPECT_EQ(regs.flags.N, 0);
+    EXPECT_EQ(regs.flags.Z, 0);
+}
+
+TEST(Opcode, TAX_zero) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0x00;
+    regs.X = 0xff;
+
+    a.org(0x300)
+    (TAX, IMPLIED, 0);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.X, 0x00);
+    EXPECT_EQ(regs.flags.Z, 1);
+}
+
+TEST(Opcode, TAY_basic) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0x80;
+
+    a.org(0x300)
+    (TAY, IMPLIED, 0);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.Y, 0x80);
+    EXPECT_EQ(regs.flags.N, 1);
+}
+
+TEST(Opcode, TXA_basic) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.X = 0x42;
+    regs.A = 0x00;
+
+    a.org(0x300)
+    (TXA, IMPLIED, 0);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0x42);
+    EXPECT_EQ(regs.flags.N, 0);
+    EXPECT_EQ(regs.flags.Z, 0);
+}
+
+TEST(Opcode, TYA_basic) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.Y = 0xff;
+    regs.A = 0x00;
+
+    a.org(0x300)
+    (TYA, IMPLIED, 0);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0xff);
+    EXPECT_EQ(regs.flags.N, 1);
+}
+
+TEST(Opcode, TSX_basic) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.SP = 0xfd;
+
+    a.org(0x300)
+    (TSX, IMPLIED, 0);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.X, 0xfd);
+    EXPECT_EQ(regs.flags.N, 1);
+    EXPECT_EQ(regs.flags.Z, 0);
+}
+
+TEST(Opcode, TXS_basic) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.X = 0xff;
+    regs.SP = 0x00;
+
+    a.org(0x300)
+    (TXS, IMPLIED, 0);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.SP, 0xff);
+}
+
+TEST(Opcode, TXS_no_flags) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.X = 0x00;
+    regs.flags.Z = 0;
+    regs.flags.N = 1;
+
+    a.org(0x300)
+    (TXS, IMPLIED, 0);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.SP, 0x00);
+    // TXS must NOT affect flags
+    EXPECT_EQ(regs.flags.Z, 0);
+    EXPECT_EQ(regs.flags.N, 1);
+}
+
 // Flag instruction tests
 TEST(Opcode, CLC) {
     RegisterFile regs;
