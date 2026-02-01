@@ -2582,4 +2582,650 @@ TEST(Opcode, ASL) {
     EXPECT_EQ(regs.flags.C, 0);
 }
 
+// Helper: run until BRK (opcode $00), with a cycle limit to avoid infinite loops
+void run_until_brk(RegisterFile& regs, Memory& mem, int limit = 10000) {
+    for (int i = 0; i < limit; i++) {
+        if (mem[regs.PC] == 0x00) return;  // BRK opcode
+        run_instr(regs, mem);
+    }
+    FAIL() << "Exceeded instruction limit";
+}
+
+// ============================================================
+// Integration tests: small 6502 programs
+// ============================================================
+
+// 8-bit multiply: result = $10 * $05 = $50 (80)
+// Uses the classic shift-and-add algorithm.
+//
+//   multiplier = $10, multiplicand = $05
+//   result (16-bit) in $02:$03
+//
+// multiply:
+//   LDA #$00       ; clear result high byte
+//   STA $03
+//   LDA #$05       ; multiplicand
+//   STA $02        ; result low = multiplicand
+//   LDX #$08       ; 8-bit counter
+// loop:
+//   LSR $03        ; shift multiplier right (use $03 as multiplier)
+//   ... actually let me use a simpler layout
+//
+// Simpler: accumulate result in A using repeated addition.
+// multiply $10 * $05 by adding $10 five times.
+TEST(Integration, Multiply_by_addition) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    // Multiply: compute $10 * Y where Y = 5
+    // Result in A
+    //
+    //        LDA #$00      ; result = 0
+    //        LDY #$05      ; counter = 5
+    // loop:  CLC
+    //        ADC #$10      ; result += $10
+    //        DEY
+    //        BNE loop
+    //        BRK
+    a.org(0x300)
+    (LDA, IMMEDIATE, 0x00)      // $300
+    (LDY, IMMEDIATE, 0x05)      // $302
+    (CLC, IMPLIED, 0)           // $304
+    (ADC, IMMEDIATE, 0x10)      // $305
+    (DEY, IMPLIED, 0)           // $307
+    (BNE, REL, 0xfa);           // $308 -> back to $304
+
+    // After loop ends, BRK at $30a
+    mem[0x30a] = 0x00;  // BRK
+
+    regs.PC = 0x300;
+    regs.SP = 0xff;
+    run_until_brk(regs, mem);
+
+    EXPECT_EQ(regs.A, 0x50);  // $10 * 5 = $50 (80)
+    EXPECT_EQ(regs.Y, 0x00);
+}
+
+// 8-bit multiply using shift-and-add
+// Computes multiplicand ($20) * multiplier ($21) -> result in $22:$23
+TEST(Integration, Multiply_shift_and_add) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    // Input: 13 * 11 = 143 ($8F)
+    mem[0x20] = 13;   // multiplicand
+    mem[0x21] = 11;   // multiplier
+    mem[0x22] = 0;    // result low
+    mem[0x23] = 0;    // result high
+
+    //        LDX #$08       ; 8 bits
+    // loop:  LSR $21        ; shift multiplier right, bit 0 -> C
+    //        BCC skip       ; if bit was 0, skip addition
+    //        CLC
+    //        LDA $22        ; result_lo += multiplicand
+    //        ADC $20
+    //        STA $22
+    //        LDA $23        ; result_hi += carry
+    //        ADC #$00
+    //        STA $23
+    // skip:  ASL $20        ; shift multiplicand left
+    //        DEX
+    //        BNE loop
+    //        BRK
+    a.org(0x400)
+    (LDX, IMMEDIATE, 0x08)     // $400
+    (LSR, ZPG, 0x21)           // $402: shift multiplier
+    (BCC, REL, 0x0c)           // $404: skip ahead to ASL if C=0 -> $412
+    (CLC, IMPLIED, 0)          // $406
+    (LDA, ZPG, 0x22)           // $407
+    (ADC, ZPG, 0x20)           // $409
+    (STA, ZPG, 0x22)           // $40b
+    (LDA, ZPG, 0x23)           // $40d
+    (ADC, IMMEDIATE, 0x00)     // $40f
+    (STA, ZPG, 0x23)           // $411
+    (ASL, ZPG, 0x20)           // $413: shift multiplicand (skip target = $412... wait)
+    ;
+
+    // The BCC skip target needs to land on the ASL.
+    // BCC at $404, instruction length 2, so PC after = $406
+    // offset $0c -> $406 + $0c = $412
+    // But ASL $20 is at $413. Let me recalculate...
+    //
+    // $400: LDX #$08  (2 bytes)
+    // $402: LSR $21   (2 bytes)
+    // $404: BCC +xx   (2 bytes)
+    // $406: CLC       (1 byte)
+    // $407: LDA $22   (2 bytes)
+    // $409: ADC $20   (2 bytes)
+    // $40b: STA $22   (2 bytes)
+    // $40d: LDA $23   (2 bytes)
+    // $40f: ADC #$00  (2 bytes)
+    // $411: STA $23   (2 bytes)
+    // $413: ASL $20   (2 bytes)
+    // $415: DEX       (1 byte)
+    // $416: BNE loop  (2 bytes) -> back to $402
+    // $418: BRK
+
+    // BCC at $404: target $413, offset = $413 - $406 = $0d
+
+    // Redo with correct offset:
+    a.org(0x400)
+    (LDX, IMMEDIATE, 0x08)     // $400
+    (LSR, ZPG, 0x21)           // $402
+    (BCC, REL, 0x0d)           // $404: skip to $413
+    (CLC, IMPLIED, 0)          // $406
+    (LDA, ZPG, 0x22)           // $407
+    (ADC, ZPG, 0x20)           // $409
+    (STA, ZPG, 0x22)           // $40b
+    (LDA, ZPG, 0x23)           // $40d
+    (ADC, IMMEDIATE, 0x00)     // $40f
+    (STA, ZPG, 0x23)           // $411
+    (ASL, ZPG, 0x20)           // $413
+    (DEX, IMPLIED, 0)          // $415
+    (BNE, REL, 0xea);          // $416: back to $402 (offset = $402 - $418 = -22 = $ea)
+
+    mem[0x418] = 0x00;  // BRK
+
+    regs.PC = 0x400;
+    regs.SP = 0xff;
+    run_until_brk(regs, mem);
+
+    uint16_t result = mem[0x22] | (mem[0x23] << 8);
+    EXPECT_EQ(result, 143);  // 13 * 11
+}
+
+// Fibonacci: compute first 10 fibonacci numbers into memory
+// fib(0)=1, fib(1)=1, fib(2)=2, ... fib(9)=55
+TEST(Integration, Fibonacci) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    // Store fib sequence at $40-$49
+    // $40 = 1, $41 = 1, then each = sum of prior two
+    //
+    //        LDA #$01
+    //        STA $40         ; fib[0] = 1
+    //        STA $41         ; fib[1] = 1
+    //        LDX #$02        ; i = 2
+    // loop:  LDA $3e,X       ; fib[i-2]
+    //        CLC
+    //        ADC $3f,X       ; + fib[i-1]
+    //        STA $40,X       ; fib[i] = sum
+    //        INX
+    //        CPX #$0a        ; i < 10?
+    //        BNE loop
+    //        BRK
+    a.org(0x500)
+    (LDA, IMMEDIATE, 0x01)     // $500
+    (STA, ZPG, 0x40)           // $502
+    (STA, ZPG, 0x41)           // $504
+    (LDX, IMMEDIATE, 0x02)     // $506
+    (LDA, ZPG_X, 0x3e)        // $508: fib[i-2]
+    (CLC, IMPLIED, 0)          // $50a
+    (ADC, ZPG_X, 0x3f)        // $50b: + fib[i-1]
+    (STA, ZPG_X, 0x40)        // $50d: store fib[i]
+    (INX, IMPLIED, 0)          // $50f
+    (CPX, IMMEDIATE, 0x0a)     // $510
+    (BNE, REL, 0xf6);          // $512: back to $50a... wait
+
+    // $508: LDA $3e,X (2 bytes)
+    // $50a: CLC       (1 byte)
+    // $50b: ADC $3f,X (2 bytes)
+    // $50d: STA $40,X (2 bytes)
+    // $50f: INX       (1 byte)
+    // $510: CPX #$0a  (2 bytes)
+    // $512: BNE xx    (2 bytes) -> target $508
+    // $514: BRK
+    //
+    // BNE at $512: target $508, offset = $508 - $514 = -12 = $f4
+
+    a.org(0x500)
+    (LDA, IMMEDIATE, 0x01)
+    (STA, ZPG, 0x40)
+    (STA, ZPG, 0x41)
+    (LDX, IMMEDIATE, 0x02)
+    (LDA, ZPG_X, 0x3e)
+    (CLC, IMPLIED, 0)
+    (ADC, ZPG_X, 0x3f)
+    (STA, ZPG_X, 0x40)
+    (INX, IMPLIED, 0)
+    (CPX, IMMEDIATE, 0x0a)
+    (BNE, REL, 0xf4);
+
+    mem[0x514] = 0x00;  // BRK
+
+    regs.PC = 0x500;
+    regs.SP = 0xff;
+    run_until_brk(regs, mem);
+
+    // Fibonacci: 1 1 2 3 5 8 13 21 34 55
+    EXPECT_EQ(mem[0x40], 1);
+    EXPECT_EQ(mem[0x41], 1);
+    EXPECT_EQ(mem[0x42], 2);
+    EXPECT_EQ(mem[0x43], 3);
+    EXPECT_EQ(mem[0x44], 5);
+    EXPECT_EQ(mem[0x45], 8);
+    EXPECT_EQ(mem[0x46], 13);
+    EXPECT_EQ(mem[0x47], 21);
+    EXPECT_EQ(mem[0x48], 34);
+    EXPECT_EQ(mem[0x49], 55);
+}
+
+// Memory copy: copy 16 bytes from $80 to $C0 using indexed addressing
+TEST(Integration, Memcpy) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    // Fill source block with test pattern
+    for (int i = 0; i < 16; i++) {
+        mem[0x80 + i] = (i * 7 + 3) & 0xff;
+    }
+
+    //        LDY #$00
+    // loop:  LDA $80,Y
+    //        STA $c0,Y
+    //        INY
+    //        CPY #$10
+    //        BNE loop
+    //        BRK
+    a.org(0x600)
+    (LDY, IMMEDIATE, 0x00)     // $600
+    (LDA, ABS_Y, 0x0080)       // $602
+    (STA, ABS_Y, 0x00c0)       // $605
+    (INY, IMPLIED, 0)           // $608
+    (CPY, IMMEDIATE, 0x10)      // $609
+    (BNE, REL, 0xf7);          // $60b: back to $602 (offset = $602 - $60d = -11 = $f5)
+
+    // Actually let me recalculate:
+    // $600: LDY #$00  (2 bytes)
+    // $602: LDA $0080,Y (3 bytes)
+    // $605: STA $00c0,Y (3 bytes)
+    // $608: INY        (1 byte)
+    // $609: CPY #$10   (2 bytes)
+    // $60b: BNE xx     (2 bytes) -> target $602
+    // $60d: BRK
+    // offset = $602 - $60d = -11 = $f5
+
+    a.org(0x600)
+    (LDY, IMMEDIATE, 0x00)
+    (LDA, ABS_Y, 0x0080)
+    (STA, ABS_Y, 0x00c0)
+    (INY, IMPLIED, 0)
+    (CPY, IMMEDIATE, 0x10)
+    (BNE, REL, 0xf5);
+
+    mem[0x60d] = 0x00;  // BRK
+
+    regs.PC = 0x600;
+    regs.SP = 0xff;
+    run_until_brk(regs, mem);
+
+    for (int i = 0; i < 16; i++) {
+        EXPECT_EQ(mem[0xc0 + i], mem[0x80 + i])
+            << "Mismatch at offset " << i;
+    }
+}
+
+// Subroutine call: JSR to a helper that doubles A, then returns
+TEST(Integration, Subroutine_double) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    // Main:
+    //        LDA #$15       ; A = 21
+    //        JSR double     ; call subroutine
+    //        STA $40        ; store result
+    //        BRK
+    //
+    // double:
+    //        ASL A          ; A = A * 2
+    //        RTS
+    a.org(0x700)
+    (LDA, IMMEDIATE, 0x15)     // $700
+    (JSR, ABS, 0x0708)         // $702
+    (STA, ZPG, 0x40)           // $705
+    ;
+    mem[0x707] = 0x00;         // BRK
+
+    a.org(0x708)
+    (ASL, ACCUMULATOR, 0)      // $708: double subroutine
+    (RTS, IMPLIED, 0);         // $709
+
+    regs.PC = 0x700;
+    regs.SP = 0xff;
+    run_until_brk(regs, mem);
+
+    EXPECT_EQ(mem[0x40], 42);  // 21 * 2
+}
+
+// Bubble sort: sort 5 bytes in memory
+TEST(Integration, Bubble_sort) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    // Data at $50-$54: unsorted
+    mem[0x50] = 5;
+    mem[0x51] = 3;
+    mem[0x52] = 4;
+    mem[0x53] = 1;
+    mem[0x54] = 2;
+
+    // Bubble sort (ascending), 5 elements at $50
+    // outer: LDX #$04       ; passes = n-1
+    // oloop: LDY #$00       ; inner index
+    //        CLC             ; clear swap flag (carry = no swap)
+    //        SEC
+    // iloop: LDA $50,Y      ; load element
+    //        CMP $51,Y      ; compare with next
+    //        BCC noswap     ; if A < next, no swap needed (unsigned)
+    //        BEQ noswap     ; if A == next, no swap
+    //        ; swap
+    //        PHA             ; save A (= $50+Y)
+    //        LDA $51,Y      ; load next element
+    //        STA $50,Y      ; store in current position
+    //        PLA             ; restore original
+    //        STA $51,Y      ; store in next position
+    // noswap:
+    //        INY
+    //        CPY #$04       ; compare against n-1
+    //        BNE iloop
+    //        DEX
+    //        BNE oloop
+    //        BRK
+
+    // Let me lay this out carefully:
+    // $800: LDX #$04        (2)
+    // $802: LDY #$00        (2)  <- oloop
+    // $804: LDA $50,Y       (2)  <- iloop
+    // $806: CMP $51,Y       (2)
+    // $808: BCC noswap      (2)  -> $814
+    // $80a: BEQ noswap      (2)  -> $814
+    // $80c: PHA              (1)
+    // $80d: LDA $51,Y       (2)
+    // $80f: STA $50,Y       (2)
+    // $811: PLA              (1)
+    // $812: STA $51,Y       (2)
+    // $814: INY              (1)  <- noswap
+    // $815: CPY #$04        (2)
+    // $817: BNE iloop       (2)  -> $804
+    // $819: DEX              (1)
+    // $81a: BNE oloop       (2)  -> $802
+    // $81c: BRK
+
+    // BCC at $808: target $814, offset = $814 - $80a = $0a
+    // BEQ at $80a: target $814, offset = $814 - $80c = $08
+    // BNE at $817: target $804, offset = $804 - $819 = -21 = $eb
+    // BNE at $81a: target $802, offset = $802 - $81c = -26 = $e6
+
+    a.org(0x800)
+    (LDX, IMMEDIATE, 0x04)
+    (LDY, IMMEDIATE, 0x00)
+    (LDA, ZPG_X, 0x50)        // Oops, need ZPG_Y not ZPG_X
+    ;
+
+    // Actually, LDA $50,Y and CMP $51,Y need the ZPG_X mode but with Y...
+    // Wait: ZPG,Y only exists for LDX and STX. For LDA we need ABS_Y.
+    // LDA zpg,X works but not LDA zpg,Y.
+    // Let me use ABS_Y: LDA $0050,Y and CMP $0051,Y
+
+    a.org(0x800)
+    (LDX, IMMEDIATE, 0x04)     // $800 (2)
+    (LDY, IMMEDIATE, 0x00)     // $802 (2) <- oloop
+    (LDA, ABS_Y, 0x0050)       // $804 (3) <- iloop
+    (CMP, ABS_Y, 0x0051)       // $807 (3)
+    (BCC, REL, 0x09)           // $80a (2) -> noswap
+    (BEQ, REL, 0x07)           // $80c (2) -> noswap
+    (PHA, IMPLIED, 0)          // $80e (1)
+    (LDA, ABS_Y, 0x0051)       // $80f (3)
+    (STA, ABS_Y, 0x0050)       // $812 (3)
+    (PLA, IMPLIED, 0)          // $815 (1)
+    (STA, ABS_Y, 0x0051)       // $816 (3)
+    (INY, IMPLIED, 0)          // $819 (1) <- noswap
+    (CPY, IMMEDIATE, 0x04)     // $81a (2)
+    (BNE, REL, 0xe8)           // $81c (2) -> iloop at $804... wait
+    (DEX, IMPLIED, 0)          // $81e (1)
+    (BNE, REL, 0xe2);          // $81f (2) -> oloop at $802
+
+    // BCC at $80a: target $819, offset = $819 - $80c = $0d
+    // BEQ at $80c: target $819, offset = $819 - $80e = $0b
+    // BNE at $81c: target $804, offset = $804 - $81e = -26 = $e6
+    // BNE at $81f: target $802, offset = $802 - $821 = -31 = $e1
+
+    // Let me recalculate everything carefully and redo:
+    a.org(0x800)
+    (LDX, IMMEDIATE, 0x04)     // $800: 2 bytes
+    (LDY, IMMEDIATE, 0x00)     // $802: 2 bytes  <- oloop
+    (LDA, ABS_Y, 0x0050)       // $804: 3 bytes  <- iloop
+    (CMP, ABS_Y, 0x0051)       // $807: 3 bytes
+    (BCC, REL, 0x0d)           // $80a: 2 bytes  -> $819
+    (BEQ, REL, 0x0b)           // $80c: 2 bytes  -> $819
+    (PHA, IMPLIED, 0)          // $80e: 1 byte
+    (LDA, ABS_Y, 0x0051)       // $80f: 3 bytes
+    (STA, ABS_Y, 0x0050)       // $812: 3 bytes
+    (PLA, IMPLIED, 0)          // $815: 1 byte
+    (STA, ABS_Y, 0x0051)       // $816: 3 bytes
+    (INY, IMPLIED, 0)          // $819: 1 byte   <- noswap
+    (CPY, IMMEDIATE, 0x04)     // $81a: 2 bytes
+    (BNE, REL, 0xe8)           // $81c: 2 bytes  -> $806... no
+    (DEX, IMPLIED, 0)          // $81e: 1 byte
+    (BNE, REL, 0xe2);          // $81f: 2 bytes  -> $803... no
+
+    // OK let me be really precise:
+    // BNE at $81c: PC after = $81e, target = $804, offset = $804 - $81e = -(0x1a) = -26
+    //   -26 as uint8 = 256-26 = 230 = $e6
+    // BNE at $81f: PC after = $821, target = $802, offset = $802 - $821 = -(0x1f) = -31
+    //   -31 as uint8 = 256-31 = 225 = $e1
+
+    a.org(0x800)
+    (LDX, IMMEDIATE, 0x04)
+    (LDY, IMMEDIATE, 0x00)
+    (LDA, ABS_Y, 0x0050)
+    (CMP, ABS_Y, 0x0051)
+    (BCC, REL, 0x0d)
+    (BEQ, REL, 0x0b)
+    (PHA, IMPLIED, 0)
+    (LDA, ABS_Y, 0x0051)
+    (STA, ABS_Y, 0x0050)
+    (PLA, IMPLIED, 0)
+    (STA, ABS_Y, 0x0051)
+    (INY, IMPLIED, 0)
+    (CPY, IMMEDIATE, 0x04)
+    (BNE, REL, 0xe6)
+    (DEX, IMPLIED, 0)
+    (BNE, REL, 0xe1);
+
+    mem[0x821] = 0x00;  // BRK
+
+    regs.PC = 0x800;
+    regs.SP = 0xff;
+    run_until_brk(regs, mem);
+
+    EXPECT_EQ(mem[0x50], 1);
+    EXPECT_EQ(mem[0x51], 2);
+    EXPECT_EQ(mem[0x52], 3);
+    EXPECT_EQ(mem[0x53], 4);
+    EXPECT_EQ(mem[0x54], 5);
+}
+
+// ============================================================
+// Classic 6502 subroutine from "Roots of the Atari" (Atari Archives)
+// 16-bit dividend / 8-bit divisor -> 8-bit quotient + remainder
+// Source: https://www.atariarchives.org/roots/chapter_10.php
+//
+// Variables (zero page):
+//   DVDL = $C0  (low byte of dividend)
+//   DVDH = $C1  (high byte of dividend)
+//   QUOT = $C2  (quotient result)
+//   DIVS = $C3  (divisor)
+//   RMDR = $C4  (remainder result)
+// ============================================================
+
+void setup_division(Memory& mem, Assembler& a) {
+    // $900: LDA $C1        (2)
+    // $902: LDX #$08       (2)
+    // $904: SEC             (1)
+    // $905: SBC $C3         (2)
+    // DLOOP:
+    // $907: PHP             (1)
+    // $908: ROL $C2         (2)
+    // $90a: ASL $C0         (2)
+    // $90c: ROL A           (1)
+    // $90d: PLP             (1)
+    // $90e: BCC ADDIT       (2) -> $915
+    // $910: SBC $C3         (2)
+    // $912: JMP NEXT        (3) -> $917
+    // ADDIT:
+    // $915: ADC $C3         (2)
+    // NEXT:
+    // $917: DEX             (1)
+    // $918: BNE DLOOP       (2) -> $907
+    // $91a: BCS FINI        (2) -> $91f
+    // $91c: ADC $C3         (2)
+    // $91e: CLC             (1)
+    // FINI:
+    // $91f: ROL $C2         (2)
+    // $921: STA $C4         (2)
+    // $923: RTS             (1)
+
+    a.org(0x900)
+    (LDA, ZPG, 0xc1)           // LDA DVDH
+    (LDX, IMMEDIATE, 0x08)     // LDX #8
+    (SEC, IMPLIED, 0)          // SEC
+    (SBC, ZPG, 0xc3)           // SBC DIVS
+    // DLOOP:
+    (PHP, IMPLIED, 0)          // PHP
+    (ROL, ZPG, 0xc2)           // ROL QUOT
+    (ASL, ZPG, 0xc0)           // ASL DVDL
+    (ROL, ACCUMULATOR, 0)      // ROL A
+    (PLP, IMPLIED, 0)          // PLP
+    (BCC, REL, 0x05)           // BCC ADDIT -> $915
+    (SBC, ZPG, 0xc3)           // SBC DIVS
+    (JMP, ABS, 0x0917)         // JMP NEXT
+    // ADDIT:
+    (ADC, ZPG, 0xc3)           // ADC DIVS
+    // NEXT:
+    (DEX, IMPLIED, 0)          // DEX
+    (BNE, REL, 0xed)           // BNE DLOOP -> $907
+    (BCS, REL, 0x03)           // BCS FINI -> $91f
+    (ADC, ZPG, 0xc3)           // ADC DIVS
+    (CLC, IMPLIED, 0)          // CLC
+    // FINI:
+    (ROL, ZPG, 0xc2)           // ROL QUOT
+    (STA, ZPG, 0xc4)           // STA RMDR
+    (RTS, IMPLIED, 0);         // RTS
+}
+
+void run_division(RegisterFile& regs, Memory& mem,
+                  uint16_t dividend, uint8_t divisor,
+                  uint8_t& quotient, uint8_t& remainder) {
+    mem[0xc0] = dividend & 0xff;        // DVDL
+    mem[0xc1] = (dividend >> 8) & 0xff; // DVDH
+    mem[0xc2] = 0;                      // QUOT
+    mem[0xc3] = divisor;                // DIVS
+    mem[0xc4] = 0;                      // RMDR
+
+    // JSR to the routine at $900, followed by BRK
+    mem[0x800] = 0x20;  // JSR
+    mem[0x801] = 0x00;  // low byte of $0900
+    mem[0x802] = 0x09;  // high byte of $0900
+    mem[0x803] = 0x00;  // BRK
+
+    regs.PC = 0x800;
+    regs.SP = 0xff;
+    run_until_brk(regs, mem);
+
+    quotient = mem[0xc2];
+    remainder = mem[0xc4];
+}
+
+// Book's example: $021C / $05 = 540 / 5 = 108 remainder 0
+TEST(Integration, Division_book_example) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+    setup_division(mem, a);
+
+    uint8_t quot, rem;
+    run_division(regs, mem, 0x021c, 0x05, quot, rem);
+
+    EXPECT_EQ(quot, 108);  // 540 / 5 = 108
+    EXPECT_EQ(rem, 0);
+}
+
+// 255 / 16 = 15 remainder 15
+TEST(Integration, Division_with_remainder) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+    setup_division(mem, a);
+
+    uint8_t quot, rem;
+    run_division(regs, mem, 0x00ff, 0x10, quot, rem);
+
+    EXPECT_EQ(quot, 15);   // 255 / 16 = 15
+    EXPECT_EQ(rem, 15);    // remainder 15
+}
+
+// 100 / 10 = 10 remainder 0
+TEST(Integration, Division_100_by_10) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+    setup_division(mem, a);
+
+    uint8_t quot, rem;
+    run_division(regs, mem, 0x0064, 0x0a, quot, rem);
+
+    EXPECT_EQ(quot, 10);
+    EXPECT_EQ(rem, 0);
+}
+
+// 1000 / 7 = 142 remainder 6
+TEST(Integration, Division_1000_by_7) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+    setup_division(mem, a);
+
+    uint8_t quot, rem;
+    run_division(regs, mem, 1000, 7, quot, rem);
+
+    EXPECT_EQ(quot, 142);  // 1000 / 7 = 142
+    EXPECT_EQ(rem, 6);     // 1000 - 142*7 = 6
+}
+
+// 0 / 1 = 0 remainder 0
+TEST(Integration, Division_zero) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+    setup_division(mem, a);
+
+    uint8_t quot, rem;
+    run_division(regs, mem, 0, 1, quot, rem);
+
+    EXPECT_EQ(quot, 0);
+    EXPECT_EQ(rem, 0);
+}
+
+// 255 / 1 = 255 remainder 0
+TEST(Integration, Division_by_one) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+    setup_division(mem, a);
+
+    uint8_t quot, rem;
+    run_division(regs, mem, 255, 1, quot, rem);
+
+    EXPECT_EQ(quot, 255);
+    EXPECT_EQ(rem, 0);
+}
+
 }
