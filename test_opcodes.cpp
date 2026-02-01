@@ -456,6 +456,388 @@ TEST(Opcode, ORA_does_not_modify_carry) {
     EXPECT_EQ(regs.flags.C, 0);  // Carry should NOT be modified by ORA
 }
 
+// AND tests
+TEST(Opcode, AND_IMM) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0b11110000;
+
+    a.org(0x300)
+    (AND, IMMEDIATE, 0b10101010);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0b10100000);
+    EXPECT_EQ(regs.flags.N, 1);  // Bit 7 set
+    EXPECT_EQ(regs.flags.Z, 0);
+}
+
+TEST(Opcode, AND_zero_result) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0b11110000;
+
+    a.org(0x300)
+    (AND, IMMEDIATE, 0b00001111);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0x00);
+    EXPECT_EQ(regs.flags.Z, 1);
+    EXPECT_EQ(regs.flags.N, 0);
+}
+
+// EOR tests
+TEST(Opcode, EOR_IMM) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0b11110000;
+
+    a.org(0x300)
+    (EOR, IMMEDIATE, 0b10101010);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0b01011010);
+    EXPECT_EQ(regs.flags.N, 0);
+    EXPECT_EQ(regs.flags.Z, 0);
+}
+
+TEST(Opcode, EOR_self_zeros) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0x55;
+
+    a.org(0x300)
+    (EOR, IMMEDIATE, 0x55);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0x00);
+    EXPECT_EQ(regs.flags.Z, 1);
+}
+
+// ADC tests
+TEST(Opcode, ADC_simple) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0x10;
+    regs.flags.C = 0;
+
+    a.org(0x300)
+    (ADC, IMMEDIATE, 0x20);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0x30);
+    EXPECT_EQ(regs.flags.C, 0);
+    EXPECT_EQ(regs.flags.V, 0);
+    EXPECT_EQ(regs.flags.Z, 0);
+    EXPECT_EQ(regs.flags.N, 0);
+}
+
+TEST(Opcode, ADC_with_carry_in) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0x10;
+    regs.flags.C = 1;
+
+    a.org(0x300)
+    (ADC, IMMEDIATE, 0x20);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0x31);  // 0x10 + 0x20 + 1
+}
+
+TEST(Opcode, ADC_carry_out) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0xff;
+    regs.flags.C = 0;
+
+    a.org(0x300)
+    (ADC, IMMEDIATE, 0x01);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0x00);
+    EXPECT_EQ(regs.flags.C, 1);
+    EXPECT_EQ(regs.flags.Z, 1);
+}
+
+TEST(Opcode, ADC_overflow_positive) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    // 0x7f + 0x01 = 0x80 (127 + 1 = -128 in signed, overflow!)
+    regs.PC = 0x300;
+    regs.A = 0x7f;
+    regs.flags.C = 0;
+
+    a.org(0x300)
+    (ADC, IMMEDIATE, 0x01);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0x80);
+    EXPECT_EQ(regs.flags.V, 1);  // Overflow: positive + positive = negative
+    EXPECT_EQ(regs.flags.N, 1);
+    EXPECT_EQ(regs.flags.C, 0);
+}
+
+TEST(Opcode, ADC_overflow_negative) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    // 0x80 + 0x80 = 0x00 (-128 + -128 = 0 in signed, overflow!)
+    regs.PC = 0x300;
+    regs.A = 0x80;
+    regs.flags.C = 0;
+
+    a.org(0x300)
+    (ADC, IMMEDIATE, 0x80);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0x00);
+    EXPECT_EQ(regs.flags.V, 1);  // Overflow: negative + negative = positive
+    EXPECT_EQ(regs.flags.C, 1);
+    EXPECT_EQ(regs.flags.Z, 1);
+}
+
+// SBC tests
+TEST(Opcode, SBC_simple) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0x30;
+    regs.flags.C = 1;  // No borrow
+
+    a.org(0x300)
+    (SBC, IMMEDIATE, 0x10);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0x20);
+    EXPECT_EQ(regs.flags.C, 1);  // No borrow
+    EXPECT_EQ(regs.flags.V, 0);
+}
+
+TEST(Opcode, SBC_with_borrow) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0x30;
+    regs.flags.C = 0;  // Borrow
+
+    a.org(0x300)
+    (SBC, IMMEDIATE, 0x10);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0x1f);  // 0x30 - 0x10 - 1
+    EXPECT_EQ(regs.flags.C, 1);
+}
+
+TEST(Opcode, SBC_borrow_out) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0x00;
+    regs.flags.C = 1;
+
+    a.org(0x300)
+    (SBC, IMMEDIATE, 0x01);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0xff);
+    EXPECT_EQ(regs.flags.C, 0);  // Borrow occurred
+    EXPECT_EQ(regs.flags.N, 1);
+}
+
+TEST(Opcode, SBC_overflow) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    // 0x80 - 0x01 = 0x7f (-128 - 1 = 127 in signed, overflow!)
+    regs.PC = 0x300;
+    regs.A = 0x80;
+    regs.flags.C = 1;
+
+    a.org(0x300)
+    (SBC, IMMEDIATE, 0x01);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0x7f);
+    EXPECT_EQ(regs.flags.V, 1);  // Overflow
+    EXPECT_EQ(regs.flags.N, 0);
+}
+
+// LSR tests
+TEST(Opcode, LSR_ACC) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0b10000010;
+
+    a.org(0x300)
+    (LSR, ACCUMULATOR, 0);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0b01000001);
+    EXPECT_EQ(regs.flags.C, 0);  // Bit 0 was 0
+    EXPECT_EQ(regs.flags.N, 0);  // Always 0 after LSR
+    EXPECT_EQ(regs.flags.Z, 0);
+}
+
+TEST(Opcode, LSR_carry_out) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0b00000001;
+
+    a.org(0x300)
+    (LSR, ACCUMULATOR, 0);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0x00);
+    EXPECT_EQ(regs.flags.C, 1);  // Bit 0 shifted out
+    EXPECT_EQ(regs.flags.Z, 1);
+}
+
+TEST(Opcode, LSR_ZPG) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    mem[0x42] = 0b11111110;
+
+    a.org(0x300)
+    (LSR, ZPG, 0x42);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(mem[0x42], 0b01111111);
+    EXPECT_EQ(regs.flags.C, 0);
+}
+
+// ROL tests
+TEST(Opcode, ROL_ACC) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0b10000001;
+    regs.flags.C = 0;
+
+    a.org(0x300)
+    (ROL, ACCUMULATOR, 0);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0b00000010);  // Shifted left, C=0 shifted in
+    EXPECT_EQ(regs.flags.C, 1);     // Bit 7 shifted out
+    EXPECT_EQ(regs.flags.N, 0);
+}
+
+TEST(Opcode, ROL_with_carry) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0b00000001;
+    regs.flags.C = 1;
+
+    a.org(0x300)
+    (ROL, ACCUMULATOR, 0);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0b00000011);  // C=1 shifted into bit 0
+    EXPECT_EQ(regs.flags.C, 0);     // Bit 7 was 0
+}
+
+// ROR tests
+TEST(Opcode, ROR_ACC) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0b10000001;
+    regs.flags.C = 0;
+
+    a.org(0x300)
+    (ROR, ACCUMULATOR, 0);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0b01000000);  // Shifted right, C=0 shifted into bit 7
+    EXPECT_EQ(regs.flags.C, 1);     // Bit 0 shifted out
+    EXPECT_EQ(regs.flags.N, 0);
+}
+
+TEST(Opcode, ROR_with_carry) {
+    RegisterFile regs;
+    Memory mem;
+    Assembler a(mem);
+
+    regs.PC = 0x300;
+    regs.A = 0b00000010;
+    regs.flags.C = 1;
+
+    a.org(0x300)
+    (ROR, ACCUMULATOR, 0);
+
+    run_instr(regs, mem);
+
+    EXPECT_EQ(regs.A, 0b10000001);  // C=1 shifted into bit 7
+    EXPECT_EQ(regs.flags.C, 0);     // Bit 0 was 0
+    EXPECT_EQ(regs.flags.N, 1);     // Bit 7 now set
+}
+
 TEST(Opcode, ASL_ABS) {
     RegisterFile regs;
     Memory mem;

@@ -194,7 +194,54 @@ uint16_t
 op_ORA(RegisterFile& regs, Memory& mem, AddressingMode mode) {
     regs.A |= operand(regs, mem, mode);
     return regs.PC + addressing_mode_to_length(mode);
-};
+}
+
+uint16_t
+op_AND(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    regs.A &= operand(regs, mem, mode);
+    return regs.PC + addressing_mode_to_length(mode);
+}
+
+uint16_t
+op_EOR(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    regs.A ^= operand(regs, mem, mode);
+    return regs.PC + addressing_mode_to_length(mode);
+}
+
+uint16_t
+op_ADC(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    uint8_t m = operand(regs, mem, mode);
+    uint8_t a = regs.A;
+    uint16_t sum = a + m + regs.flags.C;
+
+    // Overflow: set if sign of result differs from sign of both operands
+    // (only happens when adding two positives gives negative or vice versa)
+    regs.flags.V = ((a ^ sum) & (m ^ sum) & 0x80) != 0;
+    regs.flags.C = (sum > 0xff);
+    regs.A = sum & 0xff;
+    regs.flags.N = (regs.A >> 7) & 1;
+    regs.flags.Z = (regs.A == 0);
+
+    return regs.PC + addressing_mode_to_length(mode);
+}
+
+uint16_t
+op_SBC(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    uint8_t m = operand(regs, mem, mode);
+    uint8_t a = regs.A;
+    // SBC is A - M - (1 - C) = A + ~M + C
+    uint16_t diff = a + (m ^ 0xff) + regs.flags.C;
+
+    // Overflow: similar logic to ADC but with inverted M
+    uint8_t m_inv = m ^ 0xff;
+    regs.flags.V = ((a ^ diff) & (m_inv ^ diff) & 0x80) != 0;
+    regs.flags.C = (diff > 0xff);  // Borrow is inverse of carry
+    regs.A = diff & 0xff;
+    regs.flags.N = (regs.A >> 7) & 1;
+    regs.flags.Z = (regs.A == 0);
+
+    return regs.PC + addressing_mode_to_length(mode);
+}
 
 uint16_t
 op_RTI(RegisterFile& regs, Memory& mem, AddressingMode mode) {
@@ -267,6 +314,65 @@ op_ASL(RegisterFile& regs, Memory& mem, AddressingMode mode) {
     return regs.PC + addressing_mode_to_length(mode);
 }
 
+uint16_t
+op_LSR(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    uint8_t old_val, new_val;
+    if (mode == ACCUMULATOR) {
+        old_val = regs.A;
+        new_val = old_val >> 1;
+        regs.A = new_val;
+    } else {
+        uint16_t addr = effective_address(regs, mem, mode);
+        old_val = mem.bytes[addr];
+        new_val = old_val >> 1;
+        mem.bytes[addr] = new_val;
+    }
+    regs.flags.C = old_val & 1;
+    regs.flags.N = 0;  // Always 0 after right shift
+    regs.flags.Z = (new_val == 0);
+    return regs.PC + addressing_mode_to_length(mode);
+}
+
+uint16_t
+op_ROL(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    uint8_t old_val, new_val;
+    uint8_t old_carry = regs.flags.C;
+    if (mode == ACCUMULATOR) {
+        old_val = regs.A;
+        new_val = uint8_t((old_val << 1) | old_carry);
+        regs.A = new_val;
+    } else {
+        uint16_t addr = effective_address(regs, mem, mode);
+        old_val = mem.bytes[addr];
+        new_val = uint8_t((old_val << 1) | old_carry);
+        mem.bytes[addr] = new_val;
+    }
+    regs.flags.C = (old_val >> 7) & 1;
+    regs.flags.N = (new_val >> 7) & 1;
+    regs.flags.Z = (new_val == 0);
+    return regs.PC + addressing_mode_to_length(mode);
+}
+
+uint16_t
+op_ROR(RegisterFile& regs, Memory& mem, AddressingMode mode) {
+    uint8_t old_val, new_val;
+    uint8_t old_carry = regs.flags.C;
+    if (mode == ACCUMULATOR) {
+        old_val = regs.A;
+        new_val = (old_val >> 1) | (old_carry << 7);
+        regs.A = new_val;
+    } else {
+        uint16_t addr = effective_address(regs, mem, mode);
+        old_val = mem.bytes[addr];
+        new_val = (old_val >> 1) | (old_carry << 7);
+        mem.bytes[addr] = new_val;
+    }
+    regs.flags.C = old_val & 1;
+    regs.flags.N = (new_val >> 7) & 1;
+    regs.flags.Z = (new_val == 0);
+    return regs.PC + addressing_mode_to_length(mode);
+}
+
 static int instrs_to_flags[] = {
 #define MNEMONIC(mnem, flags) \
     flags,
@@ -286,11 +392,65 @@ const Opcode opcodeTable[] = {
  {ORA, 0x19, ABS_Y},
  {ORA, 0x1d, ABS_X},
 
+ {AND, 0x21, X_IND},
+ {AND, 0x25, ZPG},
+ {AND, 0x29, IMMEDIATE},
+ {AND, 0x2d, ABS},
+ {AND, 0x31, IND_Y},
+ {AND, 0x35, ZPG_X},
+ {AND, 0x39, ABS_Y},
+ {AND, 0x3d, ABS_X},
+
+ {EOR, 0x41, X_IND},
+ {EOR, 0x45, ZPG},
+ {EOR, 0x49, IMMEDIATE},
+ {EOR, 0x4d, ABS},
+ {EOR, 0x51, IND_Y},
+ {EOR, 0x55, ZPG_X},
+ {EOR, 0x59, ABS_Y},
+ {EOR, 0x5d, ABS_X},
+
+ {ADC, 0x61, X_IND},
+ {ADC, 0x65, ZPG},
+ {ADC, 0x69, IMMEDIATE},
+ {ADC, 0x6d, ABS},
+ {ADC, 0x71, IND_Y},
+ {ADC, 0x75, ZPG_X},
+ {ADC, 0x79, ABS_Y},
+ {ADC, 0x7d, ABS_X},
+
+ {SBC, 0xe1, X_IND},
+ {SBC, 0xe5, ZPG},
+ {SBC, 0xe9, IMMEDIATE},
+ {SBC, 0xed, ABS},
+ {SBC, 0xf1, IND_Y},
+ {SBC, 0xf5, ZPG_X},
+ {SBC, 0xf9, ABS_Y},
+ {SBC, 0xfd, ABS_X},
+
  {ASL, 0x0a, ACCUMULATOR},
  {ASL, 0x06, ZPG},
  {ASL, 0x16, ZPG_X},
  {ASL, 0x0e, ABS},
  {ASL, 0x1e, ABS_X},
+
+ {LSR, 0x4a, ACCUMULATOR},
+ {LSR, 0x46, ZPG},
+ {LSR, 0x56, ZPG_X},
+ {LSR, 0x4e, ABS},
+ {LSR, 0x5e, ABS_X},
+
+ {ROL, 0x2a, ACCUMULATOR},
+ {ROL, 0x26, ZPG},
+ {ROL, 0x36, ZPG_X},
+ {ROL, 0x2e, ABS},
+ {ROL, 0x3e, ABS_X},
+
+ {ROR, 0x6a, ACCUMULATOR},
+ {ROR, 0x66, ZPG},
+ {ROR, 0x76, ZPG_X},
+ {ROR, 0x6e, ABS},
+ {ROR, 0x7e, ABS_X},
 
  {RTI, 0x40, IMPLIED},
 
@@ -337,8 +497,29 @@ execute_opcode(const Opcode& opcode, RegisterFile& regs, Memory& mem) {
         case ORA:
             regs.PC = op_ORA(regs, mem, opcode.mode);
             break;
+        case AND:
+            regs.PC = op_AND(regs, mem, opcode.mode);
+            break;
+        case EOR:
+            regs.PC = op_EOR(regs, mem, opcode.mode);
+            break;
+        case ADC:
+            regs.PC = op_ADC(regs, mem, opcode.mode);
+            break;
+        case SBC:
+            regs.PC = op_SBC(regs, mem, opcode.mode);
+            break;
         case ASL:
             regs.PC = op_ASL(regs, mem, opcode.mode);
+            break;
+        case LSR:
+            regs.PC = op_LSR(regs, mem, opcode.mode);
+            break;
+        case ROL:
+            regs.PC = op_ROL(regs, mem, opcode.mode);
+            break;
+        case ROR:
+            regs.PC = op_ROR(regs, mem, opcode.mode);
             break;
         case RTI:
             regs.PC = op_RTI(regs, mem, opcode.mode);

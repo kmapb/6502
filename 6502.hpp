@@ -85,7 +85,14 @@ extern void run_instr(RegisterFile&, Memory&);
 #define MNEMONICS() \
  MNEMONIC(BRK, 0) \
  MNEMONIC(ORA, (flags::Z | flags::N)) \
+ MNEMONIC(AND, (flags::Z | flags::N)) \
+ MNEMONIC(EOR, (flags::Z | flags::N)) \
+ MNEMONIC(ADC, 0) \
+ MNEMONIC(SBC, 0) \
  MNEMONIC(ASL, 0) \
+ MNEMONIC(LSR, 0) \
+ MNEMONIC(ROL, 0) \
+ MNEMONIC(ROR, 0) \
  MNEMONIC(RTI, 0) \
  MNEMONIC(JMP, 0) \
  MNEMONIC(JSR, 0) \
